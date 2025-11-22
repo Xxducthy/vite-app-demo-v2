@@ -18,5 +18,21 @@
       "sizes": "512x512",
       "type": "image/png"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "开始背诵",
+      "short_name": "背单词",
+      "description": "Start your study session",
+      "url": "/?mode=study",
+      "icons": [{ "src": "https://img.icons8.com/fluency/192/graduation-cap.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "导入单词",
+      "short_name": "导入",
+      "description": "Import new words",
+      "url": "/?mode=import",
+      "icons": [{ "src": "https://img.icons8.com/fluency/192/plus.png", "sizes": "192x192" }]
+    }
   ]
 }

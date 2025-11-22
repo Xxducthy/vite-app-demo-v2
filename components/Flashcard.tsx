@@ -22,11 +22,19 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
     setSwipeOffset(0);
   }, [word.id]);
 
+  // Helper: Haptic Feedback
+  const triggerHaptic = (strong = false) => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate(strong ? 20 : 10);
+    }
+  };
+
   // Listen for Spacebar to flip
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
         e.preventDefault();
+        triggerHaptic();
         setIsFlipped(prev => !prev);
       }
     };
@@ -43,6 +51,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
   };
 
   const handleAction = (status: WordStatus) => {
+    triggerHaptic(true); // Stronger feedback on action
     onStatusChange(word.id, status);
     onNext();
   };
@@ -103,7 +112,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        onClick={() => setIsFlipped(!isFlipped)}
+        onClick={() => { triggerHaptic(); setIsFlipped(!isFlipped); }}
       >
         {/* LAYER 2: FLIP WRAPPER (Handles Y Rotation only) */}
         {/* This nested layer rotates around its own center, ensuring no offset. */}
