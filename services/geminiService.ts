@@ -3,11 +3,33 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { AIEnrichResponse } from "../types";
 
 const getClient = () => {
-  const apiKey = process.env.API_KEY;
+  // Safe check for API Key in various environments (Node.js, Vite, etc.)
+  // Vercel + Vite uses import.meta.env.VITE_API_KEY
+  let apiKey = '';
+  
+  try {
+    // Check for Vite/Modern Browser Env
+    if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
+        apiKey = (import.meta as any).env.VITE_API_KEY || (import.meta as any).env.API_KEY;
+    }
+  } catch (e) {}
+
+  // Fallback to standard process.env (Node/Webpack) if safe to access
   if (!apiKey) {
-    throw new Error("API_KEY is not set");
+      try {
+          if (typeof process !== 'undefined' && process.env) {
+              apiKey = process.env.API_KEY || process.env.VITE_API_KEY;
+          }
+      } catch (e) {}
   }
-  return new GoogleGenAI({ apiKey });
+
+  if (!apiKey) {
+    // Fallback warning or specific handling
+    console.warn("API Key not found. Please set VITE_API_KEY in Vercel Environment Variables.");
+    // We don't throw immediately to allow UI to load, but requests will fail gracefully later
+  }
+  
+  return new GoogleGenAI({ apiKey: apiKey || 'dummy_key_to_prevent_crash' });
 };
 
 // Simple in-memory cache
