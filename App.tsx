@@ -8,7 +8,7 @@ import { ImportModal } from './components/ImportModal';
 import { DictionaryDetail } from './components/DictionaryDetail';
 import { InstallGuide } from './components/InstallGuide';
 import { enrichWordWithAI, batchEnrichWords } from './services/geminiService';
-import { Book, List, Plus, GraduationCap, AlertCircle, Sparkles, LayoutGrid, Search, Loader2, CheckCircle2, ArrowRight, Download, Share, HelpCircle, Settings } from 'lucide-react';
+import { Book, List, Plus, GraduationCap, AlertCircle, Sparkles, LayoutGrid, Search, Loader2, CheckCircle2, ArrowRight, Download, Share, HelpCircle, Settings, Smartphone } from 'lucide-react';
 
 const STORAGE_KEY = 'kaoyan_vocab_progress_v1';
 
@@ -91,6 +91,7 @@ const App: React.FC = () => {
   // --- Handlers ---
   const handleInstallClick = () => {
     if (installPrompt) {
+      // Android/Desktop: Trigger native prompt
       installPrompt.prompt();
       installPrompt.userChoice.then((choiceResult: any) => {
         if (choiceResult.outcome === 'accepted') {
@@ -98,6 +99,7 @@ const App: React.FC = () => {
         }
       });
     } else {
+        // iOS or already installed: Show guide
         setShowInstallGuide(true);
     }
   };
@@ -169,11 +171,10 @@ const App: React.FC = () => {
         return w;
       }));
     } catch (err: any) {
-      // User friendly error for missing key
       if (err.message?.includes("API Key")) {
-          setError("未配置 API Key。请在 Vercel 环境变量中添加 VITE_API_KEY。");
+          setError("未配置 API Key。请在 Vercel 设置 DeepSeek Key (VITE_API_KEY)。");
       } else {
-          setError("AI 请求失败。请确保：1.开启了 VPN (全局模式) 2.API Key 配置正确。");
+          setError("AI 请求失败。请检查 DeepSeek 余额或 Key 设置。");
       }
       console.error(err);
     } finally {
@@ -223,8 +224,8 @@ const App: React.FC = () => {
     setEnrichProgress({ current: 0, total });
 
     // 2. Batch Processing Configuration
-    const BATCH_SIZE = 8; // Increased for speed
-    const CONCURRENCY = 4; // Increased for speed
+    const BATCH_SIZE = 8; 
+    const CONCURRENCY = 4; 
 
     const chunkArray = (arr: Word[], size: number) => {
         const results = [];
@@ -250,11 +251,7 @@ const App: React.FC = () => {
             return w;
         }));
       } catch (e: any) {
-         if (e.message?.includes("API Key") || e.message?.includes("400") || e.message?.includes("403")) {
-             setError("AI 批量解析失败：请在 Vercel 配置 VITE_API_KEY");
-         } else {
-             setError("AI 请求失败。请确保：1.开启了 VPN (全局模式) 2.API Key 配置正确。");
-         }
+         setError("部分单词解析失败，请检查 DeepSeek API Key。");
       } finally {
         completedCount += chunk.length;
         setEnrichProgress({ current: Math.min(completedCount, total), total });
@@ -362,7 +359,7 @@ const App: React.FC = () => {
               <h1 className="text-lg font-bold text-slate-800 leading-none hidden xs:block">考研 AI</h1>
               <div className="flex items-center gap-1 mt-1 hidden xs:flex">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">Smart SRS</p>
+                <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">DeepSeek CN</p>
               </div>
             </div>
           </div>
@@ -458,23 +455,13 @@ const App: React.FC = () => {
             )}
           </div>
           
-          <div className="flex gap-3 shrink-0 items-center">
-             {installPrompt && (
-                <button 
-                   onClick={handleInstallClick}
-                   className="hidden md:flex items-center gap-2 bg-slate-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 animate-in fade-in zoom-in"
-                >
-                   <Download size={14} />
-                   安装 App
-                </button>
-             )}
-             
+          <div className="flex gap-2 shrink-0 items-center">
              <button 
-                onClick={() => setShowInstallGuide(true)}
-                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"
-                title="App 安装指南"
+                onClick={handleInstallClick}
+                className="flex items-center gap-1.5 bg-slate-900 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-slate-800 transition-all shadow-md shadow-slate-200 active:scale-95"
              >
-                <HelpCircle size={20} />
+                <Smartphone size={14} />
+                <span className="hidden xs:inline">安装 App</span>
              </button>
 
              <div className="hidden md:flex gap-6 ml-2">

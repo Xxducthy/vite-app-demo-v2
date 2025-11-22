@@ -1,169 +1,180 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import { AIEnrichResponse } from "../types";
 
-const getClient = () => {
-  // Safe check for API Key in various environments (Node.js, Vite, etc.)
-  // Vercel + Vite uses import.meta.env.VITE_API_KEY
+// DeepSeek / OpenAI Compatible Service
+const API_URL = "https://api.deepseek.com/chat/completions";
+
+const getApiKey = () => {
   let apiKey = '';
-  
   try {
-    // Check for Vite/Modern Browser Env
     if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
-        apiKey = (import.meta as any).env.VITE_API_KEY || (import.meta as any).env.API_KEY;
+        apiKey = (import.meta as any).env.VITE_API_KEY;
     }
   } catch (e) {}
 
-  // Fallback to standard process.env (Node/Webpack) if safe to access
   if (!apiKey) {
       try {
           if (typeof process !== 'undefined' && process.env) {
-              apiKey = process.env.API_KEY || process.env.VITE_API_KEY;
+              apiKey = process.env.VITE_API_KEY;
           }
       } catch (e) {}
   }
-
-  if (!apiKey) {
-    console.warn("API Key not found. Please set VITE_API_KEY in Vercel Environment Variables.");
-  }
   
-  // We use a dummy key to allow the client to instantiate without crashing the app immediately.
-  // Real requests will fail gracefully with a UI error.
-  // CRITICAL FIX: Add .trim() to remove accidental whitespace from copy-pasting
-  const finalKey = apiKey ? apiKey.trim() : 'dummy_key_to_prevent_crash';
-  return new GoogleGenAI({ apiKey: finalKey });
+  return apiKey ? apiKey.trim() : '';
 };
 
-// Simple in-memory cache
 const RESULT_CACHE: Record<string, AIEnrichResponse> = {};
 
-// Single word enrichment (used for Dictionary Lookup)
+// Helper to clean Markdown code blocks ```json ... ```
+const parseJsonFromLLM = (text: string) => {
+    try {
+        // 1. Try direct parse
+        return JSON.parse(text);
+    } catch (e) {
+        // 2. Try extracting from markdown code blocks
+        const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/) || text.match(/```([\s\S]*?)```/);
+        if (jsonMatch && jsonMatch[1]) {
+            try {
+                return JSON.parse(jsonMatch[1]);
+            } catch (e2) {
+                throw new Error("Failed to parse extracted JSON");
+            }
+        }
+        // 3. Try finding first { and last }
+        const start = text.indexOf('{');
+        const end = text.lastIndexOf('}');
+        if (start !== -1 && end !== -1) {
+             try {
+                return JSON.parse(text.substring(start, end + 1));
+            } catch (e3) {
+                throw new Error("Failed to parse fuzzy JSON");
+            }
+        }
+        throw e;
+    }
+};
+
 export const enrichWordWithAI = async (inputTerm: string): Promise<AIEnrichResponse> => {
   const normalizedTerm = inputTerm.toLowerCase().trim();
   if (RESULT_CACHE[normalizedTerm]) {
     return RESULT_CACHE[normalizedTerm];
   }
 
-  const ai = getClient();
-  
-  // Optimized Prompt: Explicitly forbid English definitions
-  const prompt = `Define "${inputTerm}" for Chinese Postgraduate Entrance Exam (Kaoyan). 
-  CRITICAL RULES:
-  1. 'definition' MUST be in SIMPLIFIED CHINESE ONLY (e.g., "vt. 废除"). ABSOLUTELY NO ENGLISH IN DEFINITION.
-  2. 'example' should be from academic texts. 
-  3. 'translation' must be Chinese.`;
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API Key missing. Please set VITE_API_KEY (DeepSeek) in Vercel.");
 
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: prompt,
-    config: {
-      temperature: 0.1,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          term: { type: Type.STRING },
-          phonetic: { type: Type.STRING },
-          mnemonic: { type: Type.STRING },
-          examSource: { type: Type.STRING },
-          meanings: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                partOfSpeech: { type: Type.STRING },
-                definition: { type: Type.STRING },
-                example: { type: Type.STRING },
-                translation: { type: Type.STRING }
-              },
-              required: ["partOfSpeech", "definition", "example", "translation"]
-            }
-          }
-        },
-        required: ["term", "phonetic", "meanings"],
-      },
-    },
-  });
-
-  const text = response.text;
-  if (!text) throw new Error("No response");
+  const systemPrompt = `You are a vocabulary expert for the Chinese Postgraduate Entrance Exam (Kaoyan).
+Output a valid JSON object for the given word.
+Rules:
+1. 'term': The word itself.
+2. 'phonetic': IPA symbol.
+3. 'mnemonic': A short Chinese memory aid (root/affix or association).
+4. 'examSource': A likely source (e.g., "2015 Reading Text 1").
+5. 'meanings': Array of objects. Each has:
+   - 'partOfSpeech': e.g., "vt."
+   - 'definition': SIMPLE CHINESE DEFINITION ONLY. NO ENGLISH.
+   - 'example': A sophisticated academic English sentence suitable for exams.
+   - 'translation': Chinese translation of the sentence.
+6. Return ONLY JSON. No markdown.`;
 
   try {
-    const data = JSON.parse(text) as AIEnrichResponse;
-    RESULT_CACHE[normalizedTerm] = data;
-    if (data.term) RESULT_CACHE[data.term.toLowerCase()] = data;
-    return data;
-  } catch (e) {
-    throw new Error("Invalid JSON");
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model: "deepseek-chat",
+            messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: `Word: "${inputTerm}"` }
+            ],
+            temperature: 0.1,
+            stream: false
+        })
+      });
+
+      if (!response.ok) {
+          const err = await response.text();
+          throw new Error(`DeepSeek API Error: ${response.status} - ${err}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices[0].message.content;
+      const parsed = parseJsonFromLLM(content);
+
+      RESULT_CACHE[normalizedTerm] = parsed;
+      if (parsed.term) RESULT_CACHE[parsed.term.toLowerCase()] = parsed;
+      
+      return parsed;
+
+  } catch (error) {
+      console.error("AI Enrich Error:", error);
+      throw error;
   }
 };
 
-// Batch enrichment (used for Bulk Import)
 export const batchEnrichWords = async (inputTerms: string[]): Promise<AIEnrichResponse[]> => {
   const uncachedTerms = inputTerms.filter(t => !RESULT_CACHE[t.toLowerCase().trim()]);
-  const cachedResults = inputTerms
-    .map(t => RESULT_CACHE[t.toLowerCase().trim()])
-    .filter(Boolean);
+  const cachedResults = inputTerms.map(t => RESULT_CACHE[t.toLowerCase().trim()]).filter(Boolean);
 
-  if (uncachedTerms.length === 0) {
-    return cachedResults;
-  }
+  if (uncachedTerms.length === 0) return cachedResults;
 
-  const ai = getClient();
-  
-  // Optimized Batch Prompt with strict Chinese constraints
-  const prompt = `Define these words for Kaoyan: ${JSON.stringify(uncachedTerms)}. 
-  CRITICAL RULES:
-  1. Return a JSON Array.
-  2. 'definition' MUST be in SIMPLIFIED CHINESE ONLY (e.g., "vt. 废除"). ABSOLUTELY NO ENGLISH IN DEFINITION.
-  3. 'example' should be a complex academic sentence.
-  4. 'translation' must be Chinese.`;
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API Key missing");
 
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: prompt,
-    config: {
-      temperature: 0.1,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            term: { type: Type.STRING },
-            phonetic: { type: Type.STRING },
-            mnemonic: { type: Type.STRING },
-            examSource: { type: Type.STRING },
-            meanings: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  partOfSpeech: { type: Type.STRING },
-                  definition: { type: Type.STRING },
-                  example: { type: Type.STRING },
-                  translation: { type: Type.STRING }
-                },
-                required: ["partOfSpeech", "definition", "example", "translation"]
-              }
-            }
-          },
-          required: ["term", "phonetic", "meanings"],
-        }
-      },
-    },
-  });
-
-  const text = response.text;
-  if (!text) throw new Error("No response");
+  const systemPrompt = `You are a vocabulary engine for Kaoyan exams.
+Input: A list of words.
+Output: A JSON ARRAY containing details for each word.
+Rules:
+1. 'definition' MUST be CHINESE.
+2. 'example' must be academic English.
+3. Return strictly a JSON Array. No extra text.
+4. Handle all words in the list.`;
 
   try {
-    const newResults = JSON.parse(text) as AIEnrichResponse[];
-    newResults.forEach(data => {
-       if(data.term) RESULT_CACHE[data.term.toLowerCase()] = data;
-    });
-    return [...cachedResults, ...newResults];
-  } catch (e) {
-    console.error("Batch Parse Error", e);
-    throw new Error("Invalid Batch JSON");
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model: "deepseek-chat",
+            messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: JSON.stringify(uncachedTerms) }
+            ],
+            temperature: 0.1,
+            stream: false
+        })
+      });
+
+      if (!response.ok) throw new Error(`Batch API Error: ${response.status}`);
+
+      const data = await response.json();
+      const content = data.choices[0].message.content;
+      
+      // Batch parsing can be tricky with Markdown blocks
+      let parsedArray: AIEnrichResponse[] = [];
+      try {
+          parsedArray = parseJsonFromLLM(content);
+      } catch (e) {
+          // Fallback: try to parse partial array if LLM messed up format
+          console.error("Batch JSON parse failed, returning raw cache", e);
+      }
+
+      if (Array.isArray(parsedArray)) {
+          parsedArray.forEach(item => {
+              if (item && item.term) RESULT_CACHE[item.term.toLowerCase()] = item;
+          });
+          return [...cachedResults, ...parsedArray];
+      } else {
+          return cachedResults; // Fail gracefully
+      }
+
+  } catch (error) {
+      console.error("Batch Error:", error);
+      return cachedResults; // Return what we have
   }
 };
