@@ -1,12 +1,12 @@
 
-const CACHE_NAME = 'kaoyan-vocab-v13'; // Version Bump to v13
+const CACHE_NAME = 'kaoyan-vocab-v14'; // Version Bump to v14
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/manifest.json',
   // Cache External CDNs critical for the app shell
   'https://cdn.tailwindcss.com',
-  'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap',
+  // Removed Google Fonts to allow offline/CN access
 ];
 
 // Install Event: Cache core files
@@ -39,11 +39,10 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // 1. Cache External Assets (Tailwind, Fonts, React, Lucide Icons)
+  // 1. Cache External Assets (Tailwind, React, Lucide Icons)
   // This ensures the "App Shell" loads even if offline.
   if (
       url.hostname.includes('cdn') || 
-      url.hostname.includes('fonts') || 
       url.hostname.includes('icons8') ||
       event.request.destination === 'script' || 
       event.request.destination === 'style' ||
