@@ -171,10 +171,15 @@ const App: React.FC = () => {
         return w;
       }));
     } catch (err: any) {
-      if (err.message?.includes("API Key")) {
-          setError("未配置 API Key。请在托管平台设置环境变量 (VITE_API_KEY)。");
+      let msg = "AI 请求失败";
+      if (err.message?.includes("401") || err.message?.includes("Key")) {
+          msg = "未配置 API Key (401)";
+          setError("API Key 无效或未配置。请在 Cloudflare 环境变量中设置 VITE_API_KEY。");
+      } else if (err.message?.includes("Timeout")) {
+          msg = "请求超时 (20s)";
+          setError("AI 响应超时。DeepSeek 可能繁忙，请稍后重试。");
       } else {
-          setError("AI 请求失败。请检查 DeepSeek 余额或网络连接。");
+          setError("网络连接失败，请检查网络。");
       }
       console.error(err);
     } finally {
@@ -182,7 +187,7 @@ const App: React.FC = () => {
     }
   };
 
-  // --- OPTIMIZED BULK IMPORT (BATCH PROCESSING + INSTANT LOCAL) ---
+  // --- OPTIMIZED BULK IMPORT ---
   const handleImport = async (terms: string[]) => {
     setError(null);
     const currentTime = Date.now();
@@ -191,7 +196,6 @@ const App: React.FC = () => {
     
     if (uniqueTerms.length === 0) return;
 
-    // 1. Create initial words (Instant Pre-fill from Local Dict)
     const newWords: Word[] = uniqueTerms.map((term, idx) => {
       const localMatch = AUTOCOMPLETE_DICT.find(d => d.term.toLowerCase() === term.toLowerCase());
       return {
@@ -223,9 +227,8 @@ const App: React.FC = () => {
     const total = newWords.length;
     setEnrichProgress({ current: 0, total });
 
-    // 2. Batch Processing Configuration (Speed Optimized)
-    const BATCH_SIZE = 3; // Smaller chunks for faster initial feedback
-    const CONCURRENCY = 6; // Higher concurrency to maximize throughput
+    const BATCH_SIZE = 3; 
+    const CONCURRENCY = 6; 
 
     const chunkArray = (arr: Word[], size: number) => {
         const results = [];
@@ -251,17 +254,32 @@ const App: React.FC = () => {
             return w;
         }));
       } catch (e: any) {
-         // Error Fallback: Don't leave it hanging
+         // Error Fallback with Specific Reasons
          setWords(prev => prev.map(w => {
              if (chunk.some(cw => cw.id === w.id)) {
+                 let reason = "解析失败";
+                 if (e.message?.includes("401") || e.message?.includes("Key")) reason = "失败: Key无效";
+                 else if (e.message?.includes("Timeout")) reason = "失败: 超时";
+                 else if (e.message?.includes("JSON")) reason = "失败: 格式错误";
+                 
                  return {
                      ...w,
-                     meanings: w.meanings.map(m => ({ ...m, example: "解析失败: 请检查 API Key" }))
+                     meanings: w.meanings.length > 0 ? w.meanings.map(m => ({ ...m, example: reason })) : [{
+                         partOfSpeech: "?",
+                         definition: reason,
+                         example: "请检查 VITE_API_KEY 设置",
+                         translation: ""
+                     }]
                  };
              }
              return w;
          }));
-         setError("部分单词解析失败，请检查 DeepSeek API Key。");
+         
+         if (e.message?.includes("401")) {
+             setError("API Key 无效！请到 Cloudflare 重新部署。");
+         } else {
+             setError("部分单词解析失败，请重试。");
+         }
       } finally {
         completedCount += chunk.length;
         setEnrichProgress({ current: Math.min(completedCount, total), total });

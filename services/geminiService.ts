@@ -48,10 +48,9 @@ export const enrichWordWithAI = async (inputTerm: string): Promise<AIEnrichRespo
   if (RESULT_CACHE[normalizedTerm]) return RESULT_CACHE[normalizedTerm];
 
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key missing. Please set VITE_API_KEY.");
+  if (!apiKey) throw new Error("Missing API Key. Please set VITE_API_KEY in Cloudflare.");
 
   // Optimized Prompt: 2 Meanings + Short Examples (<10 words)
-  // This balances speed (short text) with content (2 definitions)
   const systemPrompt = `JSON generator. Word: "${inputTerm}"
 Reqs:
 1. 2 common meanings.
@@ -68,8 +67,8 @@ Schema:
 }`;
 
   const controller = new AbortController();
-  // 15s timeout: Enough for 2 meanings, but fails fast if stuck
-  const timeoutId = setTimeout(() => controller.abort(), 15000); 
+  // Increased timeout to 20s for stability
+  const timeoutId = setTimeout(() => controller.abort(), 20000); 
 
   try {
       const response = await fetch(API_URL, {
@@ -83,11 +82,12 @@ Schema:
             ],
             temperature: 0,
             stream: false,
-            max_tokens: 400
+            max_tokens: 450
         }),
         signal: controller.signal
       });
 
+      if (response.status === 401) throw new Error("401 Unauthorized: Invalid API Key");
       if (!response.ok) throw new Error(`API Error: ${response.status}`);
 
       const data = await response.json();
@@ -99,7 +99,7 @@ Schema:
       return parsed;
 
   } catch (error: any) {
-      if (error.name === 'AbortError') throw new Error("Timeout");
+      if (error.name === 'AbortError') throw new Error("Request Timeout (20s)");
       throw error;
   } finally {
       clearTimeout(timeoutId);
@@ -113,16 +113,16 @@ export const batchEnrichWords = async (inputTerms: string[]): Promise<AIEnrichRe
   if (uncachedTerms.length === 0) return cachedResults;
 
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key missing");
+  if (!apiKey) throw new Error("Missing API Key");
 
-  // Batch Prompt: Speed Focused
+  // Batch Prompt
   const systemPrompt = `Vocab DB. Input: ${JSON.stringify(uncachedTerms)}.
 Return JSON Array.
 Item: {term, phonetic, mnemonic, meanings:[{partOfSpeech, definition(CN), example(Short <10 words), translation}]}.
 JSON ONLY. No filler.`;
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 20000); 
+  const timeoutId = setTimeout(() => controller.abort(), 25000); 
 
   try {
       const response = await fetch(API_URL, {
@@ -136,12 +136,13 @@ JSON ONLY. No filler.`;
             ],
             temperature: 0,
             stream: false,
-            max_tokens: 1500
+            max_tokens: 1600
         }),
         signal: controller.signal
       });
 
-      if (!response.ok) throw new Error(`Batch Error`);
+      if (response.status === 401) throw new Error("401 Unauthorized");
+      if (!response.ok) throw new Error(`Batch Error ${response.status}`);
 
       const data = await response.json();
       let parsedArray = [];
@@ -158,7 +159,8 @@ JSON ONLY. No filler.`;
       return cachedResults;
 
   } catch (error) {
-      return cachedResults;
+      console.error("Batch enrich failed:", error);
+      throw error; // Propagate to let App.tsx handle the specific error message
   } finally {
       clearTimeout(timeoutId);
   }
