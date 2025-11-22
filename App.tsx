@@ -7,7 +7,7 @@ import { WordList } from './components/WordList';
 import { ImportModal } from './components/ImportModal';
 import { DictionaryDetail } from './components/DictionaryDetail';
 import { InstallGuide } from './components/InstallGuide';
-import { SettingsModal } from './components/SettingsModal'; // Make sure this is imported
+import { SettingsModal } from './components/SettingsModal'; // Corrected relative import
 import { enrichWordWithAI, batchEnrichWords } from './services/geminiService';
 import { Book, List, Plus, GraduationCap, AlertCircle, Sparkles, LayoutGrid, Search, Loader2, CheckCircle2, ArrowRight, Download, Share, HelpCircle, Settings, Smartphone } from 'lucide-react';
 
