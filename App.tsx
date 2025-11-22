@@ -320,13 +320,6 @@ const App: React.FC = () => {
 
     // 4. Study Mode (The Dashboard / Flashcard Switch)
     if (mode === 'study') {
-        // If we are "in study session" (user clicked start, or manually set mode)
-        // We want to show the flashcard IF there are words.
-        // BUT, we want to show a Dashboard if they just landed here.
-        
-        // Simple logic: If currentWord is defined, show Card. Else show "All Done" (or Dashboard).
-        // Let's upgrade "All Done" to a "Dashboard" that initiates the session.
-        
         if (currentWord) {
             return (
                 <div className="w-full h-full flex flex-col items-center justify-center">
