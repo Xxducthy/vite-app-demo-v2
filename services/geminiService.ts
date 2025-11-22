@@ -6,18 +6,26 @@ const API_URL = "https://api.deepseek.com/chat/completions";
 
 const getApiKey = () => {
   let apiKey = '';
+  
+  // 1. Try Cloudflare/Vite Environment Variable
   try {
     if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
         apiKey = (import.meta as any).env.VITE_API_KEY;
     }
   } catch (e) {}
 
+  // 2. Try Process Environment (Node/System)
   if (!apiKey) {
       try {
           if (typeof process !== 'undefined' && process.env) {
               apiKey = process.env.VITE_API_KEY;
           }
       } catch (e) {}
+  }
+
+  // 3. Fallback: User provided key (Hardcoded for immediate use)
+  if (!apiKey || apiKey.trim() === '') {
+      apiKey = 'sk-7205d47491db443b95bcc15d57171b47';
   }
   
   return apiKey ? apiKey.trim() : '';
@@ -48,7 +56,7 @@ export const enrichWordWithAI = async (inputTerm: string): Promise<AIEnrichRespo
   if (RESULT_CACHE[normalizedTerm]) return RESULT_CACHE[normalizedTerm];
 
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("Missing API Key. Please set VITE_API_KEY in Cloudflare.");
+  if (!apiKey) throw new Error("API Key missing. Please set VITE_API_KEY.");
 
   // Optimized Prompt: 2 Meanings + Short Examples (<10 words)
   const systemPrompt = `JSON generator. Word: "${inputTerm}"
@@ -67,8 +75,7 @@ Schema:
 }`;
 
   const controller = new AbortController();
-  // Increased timeout to 20s for stability
-  const timeoutId = setTimeout(() => controller.abort(), 20000); 
+  const timeoutId = setTimeout(() => controller.abort(), 15000); 
 
   try {
       const response = await fetch(API_URL, {
@@ -87,7 +94,6 @@ Schema:
         signal: controller.signal
       });
 
-      if (response.status === 401) throw new Error("401 Unauthorized: Invalid API Key");
       if (!response.ok) throw new Error(`API Error: ${response.status}`);
 
       const data = await response.json();
@@ -99,7 +105,7 @@ Schema:
       return parsed;
 
   } catch (error: any) {
-      if (error.name === 'AbortError') throw new Error("Request Timeout (20s)");
+      if (error.name === 'AbortError') throw new Error("Timeout");
       throw error;
   } finally {
       clearTimeout(timeoutId);
@@ -113,16 +119,16 @@ export const batchEnrichWords = async (inputTerms: string[]): Promise<AIEnrichRe
   if (uncachedTerms.length === 0) return cachedResults;
 
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("Missing API Key");
+  if (!apiKey) throw new Error("API Key missing");
 
-  // Batch Prompt
+  // Batch Prompt: Speed Focused
   const systemPrompt = `Vocab DB. Input: ${JSON.stringify(uncachedTerms)}.
 Return JSON Array.
 Item: {term, phonetic, mnemonic, meanings:[{partOfSpeech, definition(CN), example(Short <10 words), translation}]}.
 JSON ONLY. No filler.`;
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 25000); 
+  const timeoutId = setTimeout(() => controller.abort(), 20000); 
 
   try {
       const response = await fetch(API_URL, {
@@ -141,8 +147,7 @@ JSON ONLY. No filler.`;
         signal: controller.signal
       });
 
-      if (response.status === 401) throw new Error("401 Unauthorized");
-      if (!response.ok) throw new Error(`Batch Error ${response.status}`);
+      if (!response.ok) throw new Error(`Batch Error`);
 
       const data = await response.json();
       let parsedArray = [];
@@ -159,8 +164,7 @@ JSON ONLY. No filler.`;
       return cachedResults;
 
   } catch (error) {
-      console.error("Batch enrich failed:", error);
-      throw error; // Propagate to let App.tsx handle the specific error message
+      return cachedResults;
   } finally {
       clearTimeout(timeoutId);
   }
