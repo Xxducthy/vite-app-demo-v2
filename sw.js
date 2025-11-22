@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'kaoyan-vocab-v41'; // Version Bump to v41 (Ebbinghaus Features)
+const CACHE_NAME = 'kaoyan-vocab-v42'; // Version Bump to v42 (Remove Swipe)
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
