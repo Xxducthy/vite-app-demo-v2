@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Word, WordStatus } from '../types';
 import { Volume2, Check, X, Repeat, Lightbulb, BookOpenCheck } from 'lucide-react';
@@ -62,12 +63,6 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
 
     // Only trigger horizontal swipe if horizontal movement is significant and dominant
     if (Math.abs(deltaX) > 20 && Math.abs(deltaX) > Math.abs(deltaY)) {
-       // Prevent scrolling when swiping horizontally
-       if (e.cancelable) {
-         // e.preventDefault() logic often needs passive: false listener, 
-         // but React synthetic events make this harder. 
-         // Relying on UI movement to indicate swipe.
-       }
        setSwipeOffset(deltaX);
     }
   };
@@ -91,21 +86,20 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
 
   // Calculate rotation based on swipe for visual feedback
   const rotateDeg = swipeOffset * 0.05;
-  const opacityLeft = Math.min(Math.abs(Math.min(0, swipeOffset)) / 150, 1); // Fade in 'Forget' overlay
-  const opacityRight = Math.min(Math.max(0, swipeOffset) / 150, 1); // Fade in 'Mastered' overlay
 
   return (
-    <div className="w-full max-w-2xl aspect-[4/5] md:aspect-[3/2] relative cursor-pointer group perspective-1000">
+    // Updated Container: max-w-lg (smaller than 2xl), refined aspect ratio
+    <div className="w-full max-w-lg aspect-[3/4] md:aspect-[16/10] relative cursor-pointer group perspective-1000">
       
       {/* Swipe Action Indicators (Mobile) */}
-      <div className={`absolute top-1/2 left-4 -translate-y-1/2 z-0 transition-opacity duration-300 ${swipeOffset > 50 ? 'opacity-100' : 'opacity-0'}`}>
-         <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shadow-lg border-4 border-white">
-            <Check size={32} strokeWidth={3} />
+      <div className={`absolute top-1/2 left-0 -translate-y-1/2 -translate-x-full z-0 transition-opacity duration-300 ${swipeOffset > 50 ? 'opacity-100' : 'opacity-0'}`}>
+         <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shadow-sm">
+            <Check size={24} strokeWidth={3} />
          </div>
       </div>
-      <div className={`absolute top-1/2 right-4 -translate-y-1/2 z-0 transition-opacity duration-300 ${swipeOffset < -50 ? 'opacity-100' : 'opacity-0'}`}>
-         <div className="w-16 h-16 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 shadow-lg border-4 border-white">
-            <X size={32} strokeWidth={3} />
+      <div className={`absolute top-1/2 right-0 -translate-y-1/2 translate-x-full z-0 transition-opacity duration-300 ${swipeOffset < -50 ? 'opacity-100' : 'opacity-0'}`}>
+         <div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 shadow-sm">
+            <X size={24} strokeWidth={3} />
          </div>
       </div>
 
@@ -125,172 +119,139 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
       >
         
         {/* --- Front Side --- */}
-        <div className="absolute w-full h-full backface-hidden bg-white rounded-[2.5rem] shadow-2xl shadow-indigo-100/50 border border-white flex flex-col items-center justify-center p-8 md:p-12 overflow-hidden">
-           {/* Decorative */}
-           <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400"></div>
-           <div className="absolute top-8 right-8 flex flex-col items-end gap-2">
-             <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">
-               {word.tags.includes('高频') ? 'Core 500' : 'Custom'}
+        <div className="absolute w-full h-full backface-hidden bg-white rounded-3xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] border border-slate-100 flex flex-col items-center justify-center p-8 overflow-hidden relative">
+           {/* Elegant Top Gradient Line */}
+           <div className="absolute top-0 left-8 right-8 h-1 bg-gradient-to-r from-indigo-300 via-purple-300 to-pink-300 rounded-b-full opacity-60"></div>
+           
+           {/* Tag */}
+           <div className="absolute top-6 right-6">
+             <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-50/80 px-2.5 py-1 rounded-full border border-slate-100 backdrop-blur-sm">
+               {word.tags.includes('高频') ? 'Core' : 'Word'}
              </span>
            </div>
 
-          <div className="flex flex-col items-center text-center z-10 gap-6">
-            <h2 className="text-5xl md:text-7xl font-black text-slate-800 tracking-tighter leading-tight select-none">
+          <div className="flex flex-col items-center text-center z-10 gap-5 w-full">
+            {/* Word Term: Refined typography */}
+            <h2 className="text-4xl md:text-6xl font-bold text-slate-800 tracking-tight leading-tight select-none">
               {word.term}
             </h2>
             
+            {/* Phonetic Button */}
             {word.phonetic && (
               <button 
                 onClick={(e) => { e.stopPropagation(); speakText(word.term); }}
-                className="flex items-center gap-3 px-5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-2xl transition-all active:scale-95 group/audio"
+                className="flex items-center gap-2 px-4 py-2 bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 rounded-full transition-all active:scale-95 group/audio"
               >
-                <span className="text-xl font-mono tracking-wide opacity-80">{word.phonetic}</span>
-                <Volume2 size={20} className="group-hover/audio:animate-pulse" />
+                <span className="text-base font-mono opacity-80 font-medium">{word.phonetic}</span>
+                <Volume2 size={16} className="group-hover/audio:animate-pulse" />
               </button>
             )}
           </div>
 
-          {/* Swipe Hints */}
-          <div className="absolute bottom-10 w-full px-12 flex justify-between text-slate-300 opacity-0 md:opacity-100 transition-opacity">
-             <div className="flex flex-col items-center gap-1">
-                <X size={20} />
-                <span className="text-[10px] font-bold uppercase">Forget</span>
+          {/* Bottom Actions Hint (Cleaner) */}
+          <div className="absolute bottom-8 w-full px-10 flex justify-between items-end text-slate-300 opacity-0 md:opacity-100 transition-opacity">
+             <div className="flex flex-col items-center gap-1 hover:text-rose-400 transition-colors">
+                <div className="w-8 h-8 rounded-full border-2 border-current flex items-center justify-center"><X size={14} strokeWidth={3} /></div>
              </div>
-             <div className="flex flex-col items-center gap-1 animate-pulse text-indigo-300">
-                <span className="text-[10px] font-bold uppercase tracking-widest">点击 / Space</span>
+             <div className="flex flex-col items-center gap-1 animate-pulse text-indigo-200">
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Click to Flip</span>
              </div>
-             <div className="flex flex-col items-center gap-1">
-                <Check size={20} />
-                <span className="text-[10px] font-bold uppercase">Master</span>
+             <div className="flex flex-col items-center gap-1 hover:text-emerald-400 transition-colors">
+                <div className="w-8 h-8 rounded-full border-2 border-current flex items-center justify-center"><Check size={14} strokeWidth={3} /></div>
              </div>
-          </div>
-          
-          {/* Mobile hint */}
-          <div className="absolute bottom-8 md:hidden text-slate-300 text-[10px] font-medium animate-pulse">
-             左右滑动切换 • 点击翻转
           </div>
         </div>
 
         {/* --- Back Side --- */}
-        <div className="absolute w-full h-full backface-hidden rotate-y-180 bg-white rounded-[2.5rem] shadow-2xl shadow-indigo-200/40 border border-white flex flex-col overflow-hidden">
+        <div className="absolute w-full h-full backface-hidden rotate-y-180 bg-white rounded-3xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] border border-slate-100 flex flex-col overflow-hidden">
            
-           {/* Header (Mini) */}
-           <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-white/50 backdrop-blur-md z-10">
+           {/* Header */}
+           <div className="flex justify-between items-center px-6 py-4 border-b border-slate-50 bg-white/80 backdrop-blur-sm z-10">
               <div className="flex flex-col">
-                <div className="flex items-baseline gap-3">
-                  <h3 className="text-2xl font-bold text-slate-800">{word.term}</h3>
-                  <span className="text-sm font-mono text-slate-400">{word.phonetic}</span>
-                </div>
+                <h3 className="text-xl font-bold text-slate-800">{word.term}</h3>
                 {word.examSource && (
-                  <div className="flex items-center gap-1.5 mt-1 text-amber-600 bg-amber-50 w-fit px-2 py-0.5 rounded-md border border-amber-100/50">
-                    <BookOpenCheck size={10} />
-                    <span className="text-[10px] font-bold tracking-wide">{word.examSource}</span>
-                  </div>
+                  <span className="text-[10px] font-bold text-amber-600/80 tracking-wide mt-0.5">{word.examSource}</span>
                 )}
               </div>
               <button 
                 onClick={(e) => { e.stopPropagation(); speakText(word.term); }}
-                className="p-2 bg-slate-50 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors"
+                className="w-8 h-8 flex items-center justify-center bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"
               >
-                <Volume2 size={20} />
+                <Volume2 size={16} />
               </button>
            </div>
 
-           {/* Scrollable Content Area */}
-           <div className="flex-grow overflow-y-auto no-scrollbar p-6 space-y-6">
+           {/* Content */}
+           <div className="flex-grow overflow-y-auto no-scrollbar p-6 space-y-5 bg-gradient-to-b from-white to-slate-50/30">
              
-             {/* Mnemonic Section (New) */}
-             {word.mnemonic && (
-               <div className="bg-indigo-50/80 rounded-xl p-4 border border-indigo-100 relative overflow-hidden">
-                 <div className="absolute top-0 left-0 w-1 h-full bg-indigo-400"></div>
-                 <div className="flex gap-3">
-                   <div className="mt-0.5 text-indigo-500 bg-white p-1.5 rounded-lg shadow-sm h-fit">
-                     <Lightbulb size={16} fill="currentColor" className="opacity-20" />
-                     <Lightbulb size={16} className="absolute top-1.5 left-1.5" />
-                   </div>
-                   <div>
-                     <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-1">记忆辅助</h4>
-                     <p className="text-sm font-medium text-indigo-900 leading-relaxed">{word.mnemonic}</p>
-                   </div>
-                 </div>
-               </div>
-             )}
-
+             {/* Meaning List */}
              {word.meanings.map((meaning, idx) => (
-               <div key={idx} className="relative">
-                 {idx > 0 && <div className="w-full h-px bg-slate-100 my-4"></div>}
-                 
-                 {/* Definition Row */}
-                 <div className="flex items-start gap-3 mb-3">
-                    <span className="px-2 py-0.5 bg-slate-800 text-white text-xs font-bold rounded-md font-mono mt-1 shadow-sm">
+               <div key={idx} className="relative group/item">
+                 <div className="flex items-baseline gap-2 mb-2">
+                    <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100/50 font-mono">
                       {meaning.partOfSpeech}
                     </span>
-                    <p className="text-lg font-bold text-slate-800 leading-snug">
+                    <p className="text-base font-bold text-slate-800">
                       {meaning.definition}
                     </p>
                  </div>
 
-                 {/* Example Block */}
-                 <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-100/80 group/ex">
-                    <div className="flex gap-2 items-start">
-                      <div className="flex-grow">
-                        <p className="text-[15px] text-slate-600 leading-relaxed mb-1.5 font-medium font-serif italic">
-                          "{meaning.example}"
-                        </p>
-                        <p className="text-sm text-slate-400 font-light">
-                          {meaning.translation}
-                        </p>
-                      </div>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); speakText(meaning.example); }}
-                        className="mt-1 p-1.5 text-slate-300 hover:text-indigo-600 hover:bg-white rounded-lg transition-all"
-                      >
-                        <Volume2 size={16} />
-                      </button>
+                 {/* Example */}
+                 <div className="pl-3 border-l-2 border-slate-100 group-hover/item:border-indigo-200 transition-colors">
+                    <p className="text-sm text-slate-600 leading-relaxed italic font-serif">
+                      "{meaning.example}"
+                    </p>
+                    <div className="flex items-center justify-between mt-1">
+                        <p className="text-xs text-slate-400 font-light">{meaning.translation}</p>
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); speakText(meaning.example); }}
+                            className="text-slate-300 hover:text-indigo-500 transition-colors"
+                        >
+                            <Volume2 size={12} />
+                        </button>
                     </div>
                  </div>
                </div>
              ))}
 
-             <div className="h-4"></div>
+             {/* Mnemonic (Compact) */}
+             {word.mnemonic && (
+               <div className="bg-indigo-50/60 rounded-xl p-3 border border-indigo-100/60">
+                 <div className="flex gap-2 items-start">
+                   <Lightbulb size={14} className="text-indigo-500 mt-0.5 shrink-0" />
+                   <p className="text-xs font-medium text-indigo-800/90 leading-relaxed">{word.mnemonic}</p>
+                 </div>
+               </div>
+             )}
+             
+             <div className="h-2"></div>
            </div>
 
-           {/* Action Bar (Fixed at bottom) */}
-           <div className="p-6 bg-white border-t border-slate-100 grid grid-cols-3 gap-4 z-20 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.05)]">
-             
+           {/* Action Bar */}
+           <div className="px-6 py-4 bg-white border-t border-slate-100 grid grid-cols-3 gap-3 z-20">
              <button 
                onClick={(e) => { e.stopPropagation(); handleAction(WordStatus.New); }}
-               className="group flex flex-col items-center justify-center py-3 rounded-2xl hover:bg-rose-50 transition-colors active:scale-95 relative"
-               title="快捷键: 1 (或左滑)"
+               className="flex flex-col items-center justify-center py-2 rounded-xl hover:bg-rose-50 transition-colors active:scale-95 group"
              >
-               <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-500 flex items-center justify-center mb-1 shadow-sm group-hover:shadow-md transition-all">
-                 <X size={20} strokeWidth={3} />
-               </div>
-               <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">忘记</span>
+               <X size={20} className="text-rose-300 group-hover:text-rose-500 mb-1 transition-colors" />
+               <span className="text-[10px] font-bold text-rose-300 group-hover:text-rose-500 uppercase">Forget</span>
              </button>
 
              <button 
                onClick={(e) => { e.stopPropagation(); handleAction(WordStatus.Learning); }}
-               className="group flex flex-col items-center justify-center py-3 rounded-2xl hover:bg-amber-50 transition-colors active:scale-95 relative"
-               title="快捷键: 2"
+               className="flex flex-col items-center justify-center py-2 rounded-xl hover:bg-amber-50 transition-colors active:scale-95 group"
              >
-               <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center mb-1 shadow-sm group-hover:shadow-md transition-all">
-                 <Repeat size={20} strokeWidth={3} />
-               </div>
-               <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">模糊</span>
+               <Repeat size={20} className="text-amber-300 group-hover:text-amber-500 mb-1 transition-colors" />
+               <span className="text-[10px] font-bold text-amber-300 group-hover:text-amber-500 uppercase">Blurry</span>
              </button>
 
              <button 
                onClick={(e) => { e.stopPropagation(); handleAction(WordStatus.Mastered); }}
-               className="group flex flex-col items-center justify-center py-3 rounded-2xl hover:bg-emerald-50 transition-colors active:scale-95 relative"
-               title="快捷键: 3 (或右滑)"
+               className="flex flex-col items-center justify-center py-2 rounded-xl hover:bg-emerald-50 transition-colors active:scale-95 group"
              >
-               <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-1 shadow-sm group-hover:shadow-md transition-all">
-                 <Check size={20} strokeWidth={3} />
-               </div>
-               <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider">认识</span>
+               <Check size={20} className="text-emerald-300 group-hover:text-emerald-500 mb-1 transition-colors" />
+               <span className="text-[10px] font-bold text-emerald-300 group-hover:text-emerald-500 uppercase">Master</span>
              </button>
-
            </div>
         </div>
       </div>
