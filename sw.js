@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'kaoyan-vocab-v37'; // Version Bump to v37 (Crash Fix)
+const CACHE_NAME = 'kaoyan-vocab-v38'; // Version Bump to v38 (Bug Fix Edition)
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
