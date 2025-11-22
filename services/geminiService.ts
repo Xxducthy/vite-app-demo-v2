@@ -70,13 +70,13 @@ Schema:
 {
   "term": "${inputTerm}",
   "phonetic": "IPA",
-  "mnemonic": "Chinese memory aid (brief)",
+  "mnemonic": "Chinese memory aid (very brief)",
   "examSource": "e.g. 2010 Text 1",
   "meanings": [
     {
       "partOfSpeech": "vt./n.",
       "definition": "CHINESE ONLY",
-      "example": "Academic English sentence",
+      "example": "Short sentence (approx 10 words)",
       "translation": "Chinese translation"
     }
   ]
@@ -141,7 +141,7 @@ export const batchEnrichWords = async (inputTerms: string[]): Promise<AIEnrichRe
   const systemPrompt = `Kaoyan Vocab Engine.
 Input: ${JSON.stringify(uncachedTerms)}
 Output: JSON Array.
-Schema per item: {term, phonetic, mnemonic, meanings:[{partOfSpeech, definition(CN), example, translation}]}.
+Schema per item: {term, phonetic, mnemonic(brief), meanings:[{partOfSpeech, definition(CN), example(short), translation}]}.
 Keep brief. JSON ONLY.`;
 
   const controller = new AbortController();

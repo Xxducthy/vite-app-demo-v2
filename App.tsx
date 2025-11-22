@@ -223,9 +223,9 @@ const App: React.FC = () => {
     const total = newWords.length;
     setEnrichProgress({ current: 0, total });
 
-    // 2. Batch Processing Configuration
-    const BATCH_SIZE = 8; 
-    const CONCURRENCY = 4; 
+    // 2. Batch Processing Configuration (Speed Optimized)
+    const BATCH_SIZE = 3; // Smaller chunks for faster initial feedback
+    const CONCURRENCY = 6; // Higher concurrency to maximize throughput
 
     const chunkArray = (arr: Word[], size: number) => {
         const results = [];
@@ -251,6 +251,16 @@ const App: React.FC = () => {
             return w;
         }));
       } catch (e: any) {
+         // Error Fallback: Don't leave it hanging
+         setWords(prev => prev.map(w => {
+             if (chunk.some(cw => cw.id === w.id)) {
+                 return {
+                     ...w,
+                     meanings: w.meanings.map(m => ({ ...m, example: "解析失败: 请检查 API Key" }))
+                 };
+             }
+             return w;
+         }));
          setError("部分单词解析失败，请检查 DeepSeek API Key。");
       } finally {
         completedCount += chunk.length;
