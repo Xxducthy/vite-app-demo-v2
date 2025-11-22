@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'kaoyan-vocab-v15'; // Version Bump to v15 (Cloudflare)
+const CACHE_NAME = 'kaoyan-vocab-v17'; // Version Bump to v17
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',

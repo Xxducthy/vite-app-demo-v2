@@ -1,3 +1,4 @@
+
 import { AIEnrichResponse } from "../types";
 
 // DeepSeek / OpenAI Compatible Service
@@ -60,21 +61,29 @@ export const enrichWordWithAI = async (inputTerm: string): Promise<AIEnrichRespo
   }
 
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key missing. Please set VITE_API_KEY (DeepSeek) in Vercel.");
+  if (!apiKey) throw new Error("API Key missing. Please set VITE_API_KEY (DeepSeek) in Vercel/Cloudflare.");
 
-  const systemPrompt = `You are a vocabulary expert for the Chinese Postgraduate Entrance Exam (Kaoyan).
-Output a valid JSON object for the given word.
-Rules:
-1. 'term': The word itself.
-2. 'phonetic': IPA symbol.
-3. 'mnemonic': A short Chinese memory aid (root/affix or association).
-4. 'examSource': A likely source (e.g., "2015 Reading Text 1").
-5. 'meanings': Array of objects. Each has:
-   - 'partOfSpeech': e.g., "vt."
-   - 'definition': SIMPLE CHINESE DEFINITION ONLY. NO ENGLISH.
-   - 'example': A sophisticated academic English sentence suitable for exams.
-   - 'translation': Chinese translation of the sentence.
-6. Return ONLY JSON. No markdown.`;
+  // Optimized prompt for speed
+  const systemPrompt = `You are a Kaoyan English expert. Output JSON ONLY.
+Word: "${inputTerm}"
+Schema:
+{
+  "term": "${inputTerm}",
+  "phonetic": "IPA",
+  "mnemonic": "Chinese memory aid (brief)",
+  "examSource": "e.g. 2010 Text 1",
+  "meanings": [
+    {
+      "partOfSpeech": "vt./n.",
+      "definition": "CHINESE ONLY",
+      "example": "Academic English sentence",
+      "translation": "Chinese translation"
+    }
+  ]
+}`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
   try {
       const response = await fetch(API_URL, {
@@ -87,11 +96,12 @@ Rules:
             model: "deepseek-chat",
             messages: [
                 { role: "system", content: systemPrompt },
-                { role: "user", content: `Word: "${inputTerm}"` }
+                { role: "user", content: "JSON" }
             ],
             temperature: 0.1,
             stream: false
-        })
+        }),
+        signal: controller.signal
       });
 
       if (!response.ok) {
@@ -108,9 +118,14 @@ Rules:
       
       return parsed;
 
-  } catch (error) {
+  } catch (error: any) {
+      if (error.name === 'AbortError') {
+          throw new Error("Timeout: DeepSeek API took too long to respond.");
+      }
       console.error("AI Enrich Error:", error);
       throw error;
+  } finally {
+      clearTimeout(timeoutId);
   }
 };
 
@@ -123,14 +138,14 @@ export const batchEnrichWords = async (inputTerms: string[]): Promise<AIEnrichRe
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key missing");
 
-  const systemPrompt = `You are a vocabulary engine for Kaoyan exams.
-Input: A list of words.
-Output: A JSON ARRAY containing details for each word.
-Rules:
-1. 'definition' MUST be CHINESE.
-2. 'example' must be academic English.
-3. Return strictly a JSON Array. No extra text.
-4. Handle all words in the list.`;
+  const systemPrompt = `Kaoyan Vocab Engine.
+Input: ${JSON.stringify(uncachedTerms)}
+Output: JSON Array.
+Schema per item: {term, phonetic, mnemonic, meanings:[{partOfSpeech, definition(CN), example, translation}]}.
+Keep brief. JSON ONLY.`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout for batch
 
   try {
       const response = await fetch(API_URL, {
@@ -143,11 +158,12 @@ Rules:
             model: "deepseek-chat",
             messages: [
                 { role: "system", content: systemPrompt },
-                { role: "user", content: JSON.stringify(uncachedTerms) }
+                { role: "user", content: "Generate JSON Array" }
             ],
             temperature: 0.1,
             stream: false
-        })
+        }),
+        signal: controller.signal
       });
 
       if (!response.ok) throw new Error(`Batch API Error: ${response.status}`);
@@ -155,13 +171,11 @@ Rules:
       const data = await response.json();
       const content = data.choices[0].message.content;
       
-      // Batch parsing can be tricky with Markdown blocks
       let parsedArray: AIEnrichResponse[] = [];
       try {
           parsedArray = parseJsonFromLLM(content);
       } catch (e) {
-          // Fallback: try to parse partial array if LLM messed up format
-          console.error("Batch JSON parse failed, returning raw cache", e);
+          console.error("Batch JSON parse failed", e);
       }
 
       if (Array.isArray(parsedArray)) {
@@ -170,11 +184,13 @@ Rules:
           });
           return [...cachedResults, ...parsedArray];
       } else {
-          return cachedResults; // Fail gracefully
+          return cachedResults;
       }
 
   } catch (error) {
       console.error("Batch Error:", error);
-      return cachedResults; // Return what we have
+      return cachedResults;
+  } finally {
+      clearTimeout(timeoutId);
   }
 };

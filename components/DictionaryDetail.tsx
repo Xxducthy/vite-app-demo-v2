@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Word, WordStatus } from '../types';
-import { Volume2, Plus, Loader2, BookOpenCheck, Lightbulb, ArrowLeft, Trash2, Search } from 'lucide-react';
+import { Volume2, Plus, Loader2, BookOpenCheck, Lightbulb, ArrowLeft, Trash2, Search, AlertCircle } from 'lucide-react';
 import { enrichWordWithAI } from '../services/geminiService';
 import { AUTOCOMPLETE_DICT } from '../constants';
 
@@ -141,7 +141,7 @@ export const DictionaryDetail: React.FC<DictionaryDetailProps> = ({
                 partOfSpeech: localMatch.pos,
                 definition: localMatch.definition,
                 example: "Loading...",
-                translation: "正在获取考研例句..."
+                translation: "正在联网获取考研例句..."
             }],
             status: WordStatus.New,
             tags: []
@@ -165,16 +165,31 @@ export const DictionaryDetail: React.FC<DictionaryDetailProps> = ({
           repetitions: 0,
           easeFactor: 2.5
         }));
-      } catch (err) {
-        console.error(err);
-        if (!localMatch) {
-            setError("无法获取释义，请检查网络。");
+      } catch (err: any) {
+        console.error("Fetch Error:", err);
+        
+        // Critical Fix: If local match existed but AI failed, update the "Loading..." state
+        if (localMatch) {
+            setPreviewData(prev => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    meanings: prev.meanings?.map(m => ({
+                        ...m,
+                        example: "AI 联网请求失败，请检查 API Key 设置。",
+                        translation: "暂无例句"
+                    }))
+                };
+            });
+        } else {
+            setError("AI 请求超时或失败。请检查 Cloudflare 环境变量设置。");
         }
       } finally {
         setIsLoading(false);
       }
     };
 
+    // Debounce or immediate? Immediate for dictionary.
     fetchPreview();
   }, [term, existingWord]);
 
@@ -209,11 +224,11 @@ export const DictionaryDetail: React.FC<DictionaryDetailProps> = ({
         {isLoading && !previewData ? (
           <div className="flex flex-col items-center justify-center h-64 space-y-4">
             <Loader2 size={48} className="text-indigo-600 animate-spin" />
-            <p className="text-lg font-bold text-slate-700">AI 正在查询...</p>
+            <p className="text-lg font-bold text-slate-700">DeepSeek 正在极速查询...</p>
           </div>
         ) : error ? (
            <div className="flex flex-col items-center justify-center h-64 text-rose-500 p-6 text-center">
-              <Search size={48} className="mb-4 opacity-20" />
+              <AlertCircle size={48} className="mb-4 opacity-20" />
               <p className="font-bold">{error}</p>
            </div>
         ) : previewData ? (
@@ -248,7 +263,15 @@ export const DictionaryDetail: React.FC<DictionaryDetailProps> = ({
                       </div>
                       <div className="pl-4 border-l-2 border-slate-100 group-hover:border-indigo-200 transition-colors ml-1">
                          {meaning.example === "Loading..." ? (
-                             <div className="space-y-2 animate-pulse"><div className="h-4 bg-slate-100 rounded w-3/4"></div></div>
+                             <div className="flex items-center gap-2 text-indigo-400 text-sm animate-pulse">
+                                <Loader2 size={14} className="animate-spin" />
+                                <span>AI 正在生成考研真题例句...</span>
+                             </div>
+                         ) : meaning.example.includes("失败") ? (
+                             <div className="text-rose-400 text-sm font-medium flex items-center gap-2">
+                                <AlertCircle size={14} />
+                                {meaning.example}
+                             </div>
                          ) : (
                              <>
                                 <InteractiveSentence text={meaning.example || ""} />
@@ -276,7 +299,7 @@ export const DictionaryDetail: React.FC<DictionaryDetailProps> = ({
                <Trash2 size={18} /> 移除
             </button>
          ) : (
-            <button onClick={handleAdd} disabled={isLoading} className="w-full py-3.5 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-xl shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-70">
+            <button onClick={handleAdd} disabled={isLoading && !previewData} className="w-full py-3.5 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-xl shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-70">
                {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} strokeWidth={3} />} 加入背诵计划
             </button>
          )}
