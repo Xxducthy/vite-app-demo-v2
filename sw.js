@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'kaoyan-vocab-v40'; // Version Bump to v40 (Haptics & Shortcuts)
+const CACHE_NAME = 'kaoyan-vocab-v41'; // Version Bump to v41 (Ebbinghaus Features)
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',

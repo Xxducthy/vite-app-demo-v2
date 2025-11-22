@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Word, WordStatus } from '../types';
-import { Volume2, Check, X, Repeat, Lightbulb } from 'lucide-react';
+import { Volume2, Check, X, Repeat, Lightbulb, Clock } from 'lucide-react';
 
 interface FlashcardProps {
   word: Word;
@@ -16,7 +16,6 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
   const [touchStart, setTouchStart] = useState<{x: number, y: number} | null>(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
   
-  // Reset state when word changes
   useEffect(() => {
     setIsFlipped(false);
     setSwipeOffset(0);
@@ -27,6 +26,20 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
         navigator.vibrate(strong ? 20 : 10);
     }
+  };
+
+  // Helper: Predict Next Review Time (Ebbinghaus Visualization)
+  const getNextReviewText = (action: 'forget' | 'blurry' | 'master') => {
+    if (action === 'forget') return '1m';
+    if (action === 'blurry') return '10m';
+    
+    // Simplified SM-2 Prediction for display
+    let nextInterval = 1;
+    if (word.repetitions === 0) nextInterval = 1;
+    else if (word.repetitions === 1) nextInterval = 6;
+    else nextInterval = Math.round(word.interval * word.easeFactor);
+    
+    return `${nextInterval}d`;
   };
 
   // Listen for Spacebar to flip
@@ -51,7 +64,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
   };
 
   const handleAction = (status: WordStatus) => {
-    triggerHaptic(true); // Stronger feedback on action
+    triggerHaptic(true);
     onStatusChange(word.id, status);
     onNext();
   };
@@ -68,7 +81,6 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
     const deltaX = currentX - touchStart.x;
     const deltaY = currentY - touchStart.y;
 
-    // Only swipe if horizontal movement is dominant
     if (Math.abs(deltaX) > 20 && Math.abs(deltaX) > Math.abs(deltaY)) {
        setSwipeOffset(deltaX);
     }
@@ -79,17 +91,16 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
     const threshold = 100;
     if (swipeOffset > threshold) handleAction(WordStatus.Mastered);
     else if (swipeOffset < -threshold) handleAction(WordStatus.New);
-    setSwipeOffset(0);
+    else setSwipeOffset(0);
     setTouchStart(null);
   };
 
   const rotateDeg = swipeOffset * 0.05;
 
   return (
-    // Container
     <div className="w-full max-w-lg aspect-[3/4] md:aspect-[16/10] relative cursor-pointer group perspective-1000">
       
-      {/* Background Action Indicators (Fixed position relative to container) */}
+      {/* Background Action Indicators */}
       <div className={`absolute top-1/2 left-0 -translate-y-1/2 -translate-x-full z-0 transition-opacity duration-300 ${swipeOffset > 50 ? 'opacity-100' : 'opacity-0'}`}>
          <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shadow-sm">
             <Check size={24} strokeWidth={3} />
@@ -101,8 +112,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
          </div>
       </div>
 
-      {/* LAYER 1: SWIPE WRAPPER (Handles X Translation & Tilt only) */}
-      {/* This layer DOES NOT rotate Y. It only moves left/right. */}
+      {/* LAYER 1: SWIPE */}
       <div 
         className="w-full h-full transition-transform duration-300 ease-out"
         style={{ 
@@ -114,17 +124,21 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
         onTouchEnd={handleTouchEnd}
         onClick={() => { triggerHaptic(); setIsFlipped(!isFlipped); }}
       >
-        {/* LAYER 2: FLIP WRAPPER (Handles Y Rotation only) */}
-        {/* This nested layer rotates around its own center, ensuring no offset. */}
+        {/* LAYER 2: FLIP */}
         <div 
             className="relative w-full h-full transition-transform duration-500 transform-style-3d origin-center"
             style={{ transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}
         >
-            {/* --- FRONT FACE --- */}
+            {/* --- FRONT --- */}
             <div className="absolute inset-0 w-full h-full backface-hidden bg-white rounded-3xl shadow-[0_15px_40px_-10px_rgba(0,0,0,0.08)] border border-slate-100 flex flex-col items-center justify-center p-8 overflow-hidden z-10">
                 <div className="absolute top-0 left-8 right-8 h-1 bg-gradient-to-r from-indigo-300 via-purple-300 to-pink-300 rounded-b-full opacity-60"></div>
                 
-                <div className="absolute top-6 right-6">
+                <div className="absolute top-6 right-6 flex gap-2">
+                    {word.status !== WordStatus.New && (
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-amber-500 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-100 flex items-center gap-1">
+                            <Clock size={10} /> Review
+                        </span>
+                    )}
                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-50/80 px-2.5 py-1 rounded-full border border-slate-100 backdrop-blur-sm">
                     {word.tags.includes('高频') ? 'Core' : 'Word'}
                     </span>
@@ -158,7 +172,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
                 </div>
             </div>
 
-            {/* --- BACK FACE --- */}
+            {/* --- BACK --- */}
             <div 
                 className="absolute inset-0 w-full h-full backface-hidden bg-white rounded-3xl shadow-[0_15px_40px_-10px_rgba(0,0,0,0.08)] border border-slate-100 flex flex-col overflow-hidden"
                 style={{ transform: 'rotateY(180deg)' }}
@@ -211,19 +225,28 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
                     <div className="h-2"></div>
                 </div>
 
-                {/* Action Bar */}
+                {/* Action Bar with Ebbinghaus Indicators */}
                 <div className="px-6 py-4 bg-white border-t border-slate-100 grid grid-cols-3 gap-3 z-20">
                     <button onClick={(e) => { e.stopPropagation(); handleAction(WordStatus.New); }} className="flex flex-col items-center justify-center py-2 rounded-xl hover:bg-rose-50 transition-colors active:scale-95 group">
                         <X size={20} className="text-rose-300 group-hover:text-rose-500 mb-1 transition-colors" />
-                        <span className="text-[10px] font-bold text-rose-300 group-hover:text-rose-500 uppercase">Forget</span>
+                        <div className="flex items-center gap-1 mt-1">
+                            <span className="text-[10px] font-bold text-rose-300 group-hover:text-rose-500 uppercase">Forget</span>
+                            <span className="text-[8px] font-mono text-rose-200 group-hover:text-rose-400 bg-rose-50 px-1 rounded">{getNextReviewText('forget')}</span>
+                        </div>
                     </button>
                     <button onClick={(e) => { e.stopPropagation(); handleAction(WordStatus.Learning); }} className="flex flex-col items-center justify-center py-2 rounded-xl hover:bg-amber-50 transition-colors active:scale-95 group">
                         <Repeat size={20} className="text-amber-300 group-hover:text-amber-500 mb-1 transition-colors" />
-                        <span className="text-[10px] font-bold text-amber-300 group-hover:text-amber-500 uppercase">Blurry</span>
+                        <div className="flex items-center gap-1 mt-1">
+                            <span className="text-[10px] font-bold text-amber-300 group-hover:text-amber-500 uppercase">Blurry</span>
+                            <span className="text-[8px] font-mono text-amber-200 group-hover:text-amber-400 bg-amber-50 px-1 rounded">{getNextReviewText('blurry')}</span>
+                        </div>
                     </button>
                     <button onClick={(e) => { e.stopPropagation(); handleAction(WordStatus.Mastered); }} className="flex flex-col items-center justify-center py-2 rounded-xl hover:bg-emerald-50 transition-colors active:scale-95 group">
                         <Check size={20} className="text-emerald-300 group-hover:text-emerald-500 mb-1 transition-colors" />
-                        <span className="text-[10px] font-bold text-emerald-300 group-hover:text-emerald-500 uppercase">Master</span>
+                        <div className="flex items-center gap-1 mt-1">
+                            <span className="text-[10px] font-bold text-emerald-300 group-hover:text-emerald-500 uppercase">Master</span>
+                            <span className="text-[8px] font-mono text-emerald-200 group-hover:text-emerald-400 bg-emerald-50 px-1 rounded">{getNextReviewText('master')}</span>
+                        </div>
                     </button>
                 </div>
             </div>
