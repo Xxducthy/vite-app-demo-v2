@@ -28,7 +28,9 @@ const getClient = () => {
   
   // We use a dummy key to allow the client to instantiate without crashing the app immediately.
   // Real requests will fail gracefully with a UI error.
-  return new GoogleGenAI({ apiKey: apiKey || 'dummy_key_to_prevent_crash' });
+  // CRITICAL FIX: Add .trim() to remove accidental whitespace from copy-pasting
+  const finalKey = apiKey ? apiKey.trim() : 'dummy_key_to_prevent_crash';
+  return new GoogleGenAI({ apiKey: finalKey });
 };
 
 // Simple in-memory cache

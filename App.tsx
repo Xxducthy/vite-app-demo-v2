@@ -173,7 +173,7 @@ const App: React.FC = () => {
       if (err.message?.includes("API Key")) {
           setError("未配置 API Key。请在 Vercel 环境变量中添加 VITE_API_KEY。");
       } else {
-          setError("AI 请求失败，请检查网络连接。");
+          setError("AI 请求失败。请确保：1.开启了 VPN (全局模式) 2.API Key 配置正确。");
       }
       console.error(err);
     } finally {
@@ -223,8 +223,8 @@ const App: React.FC = () => {
     setEnrichProgress({ current: 0, total });
 
     // 2. Batch Processing Configuration
-    const BATCH_SIZE = 5; 
-    const CONCURRENCY = 2; 
+    const BATCH_SIZE = 8; // Increased for speed
+    const CONCURRENCY = 4; // Increased for speed
 
     const chunkArray = (arr: Word[], size: number) => {
         const results = [];
@@ -252,6 +252,8 @@ const App: React.FC = () => {
       } catch (e: any) {
          if (e.message?.includes("API Key") || e.message?.includes("400") || e.message?.includes("403")) {
              setError("AI 批量解析失败：请在 Vercel 配置 VITE_API_KEY");
+         } else {
+             setError("AI 请求失败。请确保：1.开启了 VPN (全局模式) 2.API Key 配置正确。");
          }
       } finally {
         completedCount += chunk.length;
