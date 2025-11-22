@@ -24,9 +24,11 @@ const getApiKey = () => {
   }
 
   // 3. Fallback: User provided key (Hardcoded for immediate use)
+  // --- USER HARDCODED KEY START ---
   if (!apiKey || apiKey.trim() === '') {
       apiKey = 'sk-7205d47491db443b95bcc15d57171b47';
   }
+  // --- USER HARDCODED KEY END ---
   
   return apiKey ? apiKey.trim() : '';
 };
