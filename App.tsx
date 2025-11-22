@@ -172,9 +172,9 @@ const App: React.FC = () => {
       }));
     } catch (err: any) {
       if (err.message?.includes("API Key")) {
-          setError("未配置 API Key。请在 Vercel 设置 DeepSeek Key (VITE_API_KEY)。");
+          setError("未配置 API Key。请在托管平台设置环境变量 (VITE_API_KEY)。");
       } else {
-          setError("AI 请求失败。请检查 DeepSeek 余额或 Key 设置。");
+          setError("AI 请求失败。请检查 DeepSeek 余额或网络连接。");
       }
       console.error(err);
     } finally {
