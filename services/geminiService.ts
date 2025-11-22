@@ -25,30 +25,19 @@ const getApiKey = () => {
 
 const RESULT_CACHE: Record<string, AIEnrichResponse> = {};
 
-// Helper to clean Markdown code blocks ```json ... ```
+// Helper to clean Markdown code blocks
 const parseJsonFromLLM = (text: string) => {
     try {
-        // 1. Try direct parse
         return JSON.parse(text);
     } catch (e) {
-        // 2. Try extracting from markdown code blocks
         const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/) || text.match(/```([\s\S]*?)```/);
         if (jsonMatch && jsonMatch[1]) {
-            try {
-                return JSON.parse(jsonMatch[1]);
-            } catch (e2) {
-                throw new Error("Failed to parse extracted JSON");
-            }
+            try { return JSON.parse(jsonMatch[1]); } catch (e2) {}
         }
-        // 3. Try finding first { and last }
         const start = text.indexOf('{');
         const end = text.lastIndexOf('}');
         if (start !== -1 && end !== -1) {
-             try {
-                return JSON.parse(text.substring(start, end + 1));
-            } catch (e3) {
-                throw new Error("Failed to parse fuzzy JSON");
-            }
+             try { return JSON.parse(text.substring(start, end + 1)); } catch (e3) {}
         }
         throw e;
     }
@@ -56,62 +45,53 @@ const parseJsonFromLLM = (text: string) => {
 
 export const enrichWordWithAI = async (inputTerm: string): Promise<AIEnrichResponse> => {
   const normalizedTerm = inputTerm.toLowerCase().trim();
-  if (RESULT_CACHE[normalizedTerm]) {
-    return RESULT_CACHE[normalizedTerm];
-  }
+  if (RESULT_CACHE[normalizedTerm]) return RESULT_CACHE[normalizedTerm];
 
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key missing. Please set VITE_API_KEY (DeepSeek) in Vercel/Cloudflare.");
+  if (!apiKey) throw new Error("API Key missing. Please set VITE_API_KEY.");
 
-  // Optimized prompt for speed
-  const systemPrompt = `You are a Kaoyan English expert. Output JSON ONLY.
-Word: "${inputTerm}"
+  // Optimized Prompt: 2 Meanings + Short Examples (<10 words)
+  // This balances speed (short text) with content (2 definitions)
+  const systemPrompt = `JSON generator. Word: "${inputTerm}"
+Reqs:
+1. 2 common meanings.
+2. Examples: Simple, very short (<10 words).
 Schema:
 {
   "term": "${inputTerm}",
   "phonetic": "IPA",
-  "mnemonic": "Chinese memory aid (very brief)",
-  "examSource": "e.g. 2010 Text 1",
+  "mnemonic": "Brief Chinese aid",
   "meanings": [
-    {
-      "partOfSpeech": "vt./n.",
-      "definition": "CHINESE ONLY",
-      "example": "Short sentence (approx 10 words)",
-      "translation": "Chinese translation"
-    }
+    { "partOfSpeech": "v./n.", "definition": "CN", "example": "Short sentence", "translation": "CN" },
+    { "partOfSpeech": "v./n.", "definition": "CN", "example": "Short sentence", "translation": "CN" }
   ]
 }`;
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+  // 15s timeout: Enough for 2 meanings, but fails fast if stuck
+  const timeoutId = setTimeout(() => controller.abort(), 15000); 
 
   try {
       const response = await fetch(API_URL, {
         method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`
-        },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
         body: JSON.stringify({
             model: "deepseek-chat",
             messages: [
                 { role: "system", content: systemPrompt },
                 { role: "user", content: "JSON" }
             ],
-            temperature: 0.1,
-            stream: false
+            temperature: 0,
+            stream: false,
+            max_tokens: 400
         }),
         signal: controller.signal
       });
 
-      if (!response.ok) {
-          const err = await response.text();
-          throw new Error(`DeepSeek API Error: ${response.status} - ${err}`);
-      }
+      if (!response.ok) throw new Error(`API Error: ${response.status}`);
 
       const data = await response.json();
-      const content = data.choices[0].message.content;
-      const parsed = parseJsonFromLLM(content);
+      const parsed = parseJsonFromLLM(data.choices[0].message.content);
 
       RESULT_CACHE[normalizedTerm] = parsed;
       if (parsed.term) RESULT_CACHE[parsed.term.toLowerCase()] = parsed;
@@ -119,10 +99,7 @@ Schema:
       return parsed;
 
   } catch (error: any) {
-      if (error.name === 'AbortError') {
-          throw new Error("Timeout: DeepSeek API took too long to respond.");
-      }
-      console.error("AI Enrich Error:", error);
+      if (error.name === 'AbortError') throw new Error("Timeout");
       throw error;
   } finally {
       clearTimeout(timeoutId);
@@ -138,57 +115,49 @@ export const batchEnrichWords = async (inputTerms: string[]): Promise<AIEnrichRe
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key missing");
 
-  const systemPrompt = `Kaoyan Vocab Engine.
-Input: ${JSON.stringify(uncachedTerms)}
-Output: JSON Array.
-Schema per item: {term, phonetic, mnemonic(brief), meanings:[{partOfSpeech, definition(CN), example(short), translation}]}.
-Keep brief. JSON ONLY.`;
+  // Batch Prompt: Speed Focused
+  const systemPrompt = `Vocab DB. Input: ${JSON.stringify(uncachedTerms)}.
+Return JSON Array.
+Item: {term, phonetic, mnemonic, meanings:[{partOfSpeech, definition(CN), example(Short <10 words), translation}]}.
+JSON ONLY. No filler.`;
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout for batch
+  const timeoutId = setTimeout(() => controller.abort(), 20000); 
 
   try {
       const response = await fetch(API_URL, {
         method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`
-        },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
         body: JSON.stringify({
             model: "deepseek-chat",
             messages: [
                 { role: "system", content: systemPrompt },
-                { role: "user", content: "Generate JSON Array" }
+                { role: "user", content: "JSON Array" }
             ],
-            temperature: 0.1,
-            stream: false
+            temperature: 0,
+            stream: false,
+            max_tokens: 1500
         }),
         signal: controller.signal
       });
 
-      if (!response.ok) throw new Error(`Batch API Error: ${response.status}`);
+      if (!response.ok) throw new Error(`Batch Error`);
 
       const data = await response.json();
-      const content = data.choices[0].message.content;
-      
-      let parsedArray: AIEnrichResponse[] = [];
+      let parsedArray = [];
       try {
-          parsedArray = parseJsonFromLLM(content);
-      } catch (e) {
-          console.error("Batch JSON parse failed", e);
-      }
+          parsedArray = parseJsonFromLLM(data.choices[0].message.content);
+      } catch (e) {}
 
       if (Array.isArray(parsedArray)) {
           parsedArray.forEach(item => {
               if (item && item.term) RESULT_CACHE[item.term.toLowerCase()] = item;
           });
           return [...cachedResults, ...parsedArray];
-      } else {
-          return cachedResults;
       }
+      return cachedResults;
 
   } catch (error) {
-      console.error("Batch Error:", error);
       return cachedResults;
   } finally {
       clearTimeout(timeoutId);
