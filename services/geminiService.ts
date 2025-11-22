@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { AIEnrichResponse } from "../types";
 
@@ -24,11 +23,11 @@ const getClient = () => {
   }
 
   if (!apiKey) {
-    // Fallback warning or specific handling
     console.warn("API Key not found. Please set VITE_API_KEY in Vercel Environment Variables.");
-    // We don't throw immediately to allow UI to load, but requests will fail gracefully later
   }
   
+  // We use a dummy key to allow the client to instantiate without crashing the app immediately.
+  // Real requests will fail gracefully with a UI error.
   return new GoogleGenAI({ apiKey: apiKey || 'dummy_key_to_prevent_crash' });
 };
 

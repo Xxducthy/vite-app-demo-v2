@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Word, WordStatus, ViewMode, DictionaryEntry } from './types';
 import { INITIAL_WORDS, AUTOCOMPLETE_DICT } from './constants';
@@ -7,7 +8,7 @@ import { ImportModal } from './components/ImportModal';
 import { DictionaryDetail } from './components/DictionaryDetail';
 import { InstallGuide } from './components/InstallGuide';
 import { enrichWordWithAI, batchEnrichWords } from './services/geminiService';
-import { Book, List, Plus, GraduationCap, AlertCircle, Sparkles, LayoutGrid, Search, Loader2, CheckCircle2, ArrowRight, Download, Share, HelpCircle } from 'lucide-react';
+import { Book, List, Plus, GraduationCap, AlertCircle, Sparkles, LayoutGrid, Search, Loader2, CheckCircle2, ArrowRight, Download, Share, HelpCircle, Settings } from 'lucide-react';
 
 const STORAGE_KEY = 'kaoyan_vocab_progress_v1';
 
@@ -156,7 +157,6 @@ const App: React.FC = () => {
     setWords(prev => prev.filter(w => w.id !== id));
   };
 
-  // Single word enrichment (Dictionary/Retry)
   const handleEnrichWord = async (wordToEnrich: Word) => {
     setIsLoading(true);
     setError(null);
@@ -169,7 +169,12 @@ const App: React.FC = () => {
         return w;
       }));
     } catch (err: any) {
-      setError("AI 请求失败。请检查 API Key。");
+      // User friendly error for missing key
+      if (err.message?.includes("API Key")) {
+          setError("未配置 API Key。请在 Vercel 环境变量中添加 VITE_API_KEY。");
+      } else {
+          setError("AI 请求失败，请检查网络连接。");
+      }
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -187,18 +192,15 @@ const App: React.FC = () => {
 
     // 1. Create initial words (Instant Pre-fill from Local Dict)
     const newWords: Word[] = uniqueTerms.map((term, idx) => {
-      // Try to find in local dictionary immediately
       const localMatch = AUTOCOMPLETE_DICT.find(d => d.term.toLowerCase() === term.toLowerCase());
-      
       return {
         id: `new-${currentTime}-${idx}-${Math.random().toString(36).substr(2, 5)}`,
         term,
-        // If found locally, pre-fill the meaning! This makes it feel INSTANT.
         meanings: localMatch ? [{
             partOfSpeech: localMatch.pos,
             definition: localMatch.definition,
-            example: "Loading exam sentence...",
-            translation: "正在获取真题例句..."
+            example: "Waiting for AI...",
+            translation: "等待 AI 生成例句..."
         }] : [], 
         status: WordStatus.New,
         tags: ['导入'],
@@ -224,7 +226,6 @@ const App: React.FC = () => {
     const BATCH_SIZE = 5; 
     const CONCURRENCY = 2; 
 
-    // Helper to split array into chunks
     const chunkArray = (arr: Word[], size: number) => {
         const results = [];
         for (let i = 0; i < arr.length; i += size) {
@@ -236,30 +237,28 @@ const App: React.FC = () => {
     const wordChunks = chunkArray(newWords, BATCH_SIZE);
     let completedCount = 0;
 
-    // Process a single chunk of words
     const processChunk = async (chunk: Word[]) => {
       try {
         const termsToFetch = chunk.map(w => w.term);
         const enrichedResults = await batchEnrichWords(termsToFetch);
         
-        // Map results back to words
         setWords(prev => prev.map(w => {
-            // Find matching result for this word
             const result = enrichedResults.find(r => r.term?.toLowerCase() === w.term.toLowerCase() || w.term.toLowerCase().includes(r.term?.toLowerCase() || ""));
             if (result && chunk.some(cw => cw.id === w.id)) {
                 return { ...w, ...result };
             }
             return w;
         }));
-      } catch (e) {
-        console.error(`Batch failed for ${chunk.map(w => w.term).join(', ')}`, e);
+      } catch (e: any) {
+         if (e.message?.includes("API Key") || e.message?.includes("400") || e.message?.includes("403")) {
+             setError("AI 批量解析失败：请在 Vercel 配置 VITE_API_KEY");
+         }
       } finally {
         completedCount += chunk.length;
         setEnrichProgress({ current: Math.min(completedCount, total), total });
       }
     };
 
-    // Run Concurrent Queue
     const runQueue = async () => {
       const queue = [...wordChunks];
       const activeWorkers: Promise<void>[] = [];
