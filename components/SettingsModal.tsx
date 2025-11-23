@@ -35,6 +35,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
               setCopyMsg({type: 'error', text: "没有数据"}); return;
           }
           const json = JSON.stringify(currentWords);
+          // Simple compression/encoding
           const code = btoa(unescape(encodeURIComponent(json)));
           
           if (code.length > 50000) {
