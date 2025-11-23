@@ -9,7 +9,7 @@ import { DictionaryDetail } from './components/DictionaryDetail';
 import { InstallGuide } from './components/InstallGuide';
 import { SettingsModal } from './components/SettingsModal'; 
 import { enrichWordWithAI, batchEnrichWords } from './services/geminiService';
-import { Book, List, Plus, GraduationCap, AlertCircle, Sparkles, LayoutGrid, Search, Loader2, CheckCircle2, ArrowRight, Download, Share, HelpCircle, Settings, Smartphone } from 'lucide-react';
+import { Book, List, Plus, GraduationCap, AlertCircle, Search, Download, Settings } from 'lucide-react';
 
 const STORAGE_KEY = 'kaoyan_vocab_progress_v1';
 
@@ -260,14 +260,35 @@ const App: React.FC = () => {
     setShowSearchDropdown(true);
   };
 
-  // Sync Feature: Handle restoring data from file
+  // --- SYNC & DATA MANAGEMENT HANDLERS ---
+
+  // Mode 1: Restore (Overwrite)
   const handleRestoreData = (newWords: Word[]) => {
-      if (confirm('确定要导入备份吗？这将覆盖当前进度。建议先导出当前进度作为备份。')) {
-          setWords(newWords);
-          alert(`成功恢复 ${newWords.length} 个单词的进度！`);
-          setShowSettings(false);
-          setMode('list'); // Switch to list to see changes
-      }
+      setWords(newWords);
+      alert(`同步完成！共 ${newWords.length} 个单词。`);
+      setShowSettings(false);
+      setMode('list');
+  };
+
+  // Mode 2: Merge (Import Local DB)
+  const handleMergeData = (importedWords: Word[]) => {
+      const currentTerms = new Set(words.map(w => w.term.toLowerCase()));
+      const wordsToAdd = importedWords.filter(w => !currentTerms.has(w.term.toLowerCase()));
+      const mergedWords = [...words, ...wordsToAdd];
+      setWords(mergedWords);
+      alert(`合并完成！新增 ${wordsToAdd.length} 个单词。`);
+      setShowSettings(false);
+      setMode('list');
+  };
+
+  // Mode 3: Clear
+  const handleClearData = () => {
+      setWords(INITIAL_WORDS);
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem('kaoyan_sync_code');
+      alert("数据已重置。");
+      setShowSettings(false);
+      setMode('list');
   };
 
   useEffect(() => {
@@ -292,6 +313,8 @@ const App: React.FC = () => {
             onClose={() => setShowSettings(false)} 
             currentWords={words}
             onRestoreData={handleRestoreData}
+            onMergeData={handleMergeData}
+            onClearData={handleClearData}
         />
       )}
 
