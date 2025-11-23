@@ -1,5 +1,4 @@
-
-const CACHE_NAME = 'kaoyan-vocab-v50'; // Version Bump to v50 (Nuclear Cache Clear)
+const CACHE_NAME = 'kaoyan-vocab-v51'; // Version Bump to v51 (Nuclear Reset)
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',

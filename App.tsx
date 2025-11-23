@@ -51,14 +51,17 @@ const App: React.FC = () => {
   // --- Effects ---
   useEffect(() => {
      const interval = setInterval(() => setNow(Date.now()), 30000);
-     console.log("App Version: v5.0 (Sync Force Updated)"); // Version Log
+     console.log("App Version: v5.1 (Do-or-Die Update)"); 
      
-     // Force Refresh Logic: Check if we need to bust cache
-     const version = 'v5.0';
-     if (localStorage.getItem('app_version') !== version) {
-         localStorage.setItem('app_version', version);
-         // Optional: Force reload if major version change
-         // window.location.reload();
+     // Force Refresh Logic: Check if we need to bust cache on client side
+     const currentVersion = 'v5.1';
+     const savedVersion = localStorage.getItem('app_version_check');
+     if (savedVersion !== currentVersion) {
+         localStorage.setItem('app_version_check', currentVersion);
+         // Allow the SW unregistration in index.html to happen, then reload
+         setTimeout(() => {
+             window.location.reload();
+         }, 1000);
      }
      
      return () => clearInterval(interval);
