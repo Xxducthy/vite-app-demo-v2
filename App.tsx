@@ -9,7 +9,7 @@ import { DictionaryDetail } from './components/DictionaryDetail';
 import { InstallGuide } from './components/InstallGuide';
 import { SettingsModal } from './components/SettingsModal'; 
 import { enrichWordWithAI, batchEnrichWords } from './services/geminiService';
-import { Book, List, Plus, GraduationCap, AlertCircle, Sparkles, LayoutGrid, Search, Loader2, CheckCircle2, ArrowRight, Download, Share, HelpCircle, Settings, Smartphone, Clock, TrendingUp, RotateCcw } from 'lucide-react';
+import { Book, List, Plus, GraduationCap, AlertCircle, Sparkles, LayoutGrid, Search, Loader2, CheckCircle2, ArrowRight, Download, Share, HelpCircle, Settings, Smartphone } from 'lucide-react';
 
 const STORAGE_KEY = 'kaoyan_vocab_progress_v1';
 
@@ -40,35 +40,14 @@ const App: React.FC = () => {
   const [isIOS, setIsIOS] = useState(false);
   const [showInstallGuide, setShowInstallGuide] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [forceReviewMastered, setForceReviewMastered] = useState(false);
 
-  // --- Derived State (The "Plan") ---
-  
-  let studyQueue: Word[] = [];
-
-  if (forceReviewMastered) {
-      // In "Cram" mode: Review ALL mastered words (Randomized)
-      studyQueue = words.filter(w => w.status === WordStatus.Mastered).sort(() => Math.random() - 0.5);
-  } else {
-      // Normal Mode
-      // 1. Due reviews
-      const dueWords = words.filter(w => w.status !== WordStatus.New && w.nextReview <= now);
-      // 2. New words
-      const newWords = words.filter(w => w.status === WordStatus.New);
-      // Priority: Due -> New
-      studyQueue = [...dueWords.sort((a, b) => a.nextReview - b.nextReview), ...newWords];
-  }
+  // --- Derived State ---
+  const studyQueue = words
+    .filter(w => w.nextReview <= now)
+    .sort((a, b) => a.nextReview - b.nextReview);
 
   const currentWord = studyQueue.length > 0 ? studyQueue[0] : null;
   
-  const stats = {
-    total: words.length,
-    mastered: words.filter(w => w.status === WordStatus.Mastered).length,
-    learning: words.filter(w => w.status === WordStatus.Learning).length,
-    new: words.filter(w => w.status === WordStatus.New).length,
-    due: words.filter(w => w.status !== WordStatus.New && w.nextReview <= now).length
-  };
-
   // --- Effects ---
   useEffect(() => {
      const interval = setInterval(() => setNow(Date.now()), 30000);
@@ -131,7 +110,7 @@ const App: React.FC = () => {
       if (easeFactor < 1.3) easeFactor = 1.3;
 
       let nextReview = currentTime;
-      if (quality === 0) nextReview = currentTime + 60 * 1000; 
+      if (quality === 0) nextReview = currentTime; 
       else if (quality === 3 && repetitions <= 1) nextReview = currentTime + 10 * 60 * 1000;
       else nextReview = currentTime + (interval * 24 * 60 * 60 * 1000);
 
@@ -174,7 +153,7 @@ const App: React.FC = () => {
     const uniqueTerms = terms.filter(t => !words.some(w => w.term.toLowerCase() === t.toLowerCase()));
     if (uniqueTerms.length === 0) return;
 
-    const newWordsData: Word[] = uniqueTerms.map((term, idx) => {
+    const newWords: Word[] = uniqueTerms.map((term, idx) => {
       const localMatch = AUTOCOMPLETE_DICT.find(d => d.term.toLowerCase() === term.toLowerCase());
       return {
         id: `new-${currentTime}-${idx}-${Math.random().toString(36).substr(2, 5)}`,
@@ -194,12 +173,12 @@ const App: React.FC = () => {
       };
     });
 
-    setWords(prev => [...newWordsData, ...prev]);
+    setWords(prev => [...newWords, ...prev]);
     if (mode === 'import') setMode('list');
     setSearchTerm('');
     setShowSearchDropdown(false);
     
-    const total = newWordsData.length;
+    const total = newWords.length;
     setEnrichProgress({ current: 0, total });
 
     const BATCH_SIZE = 3; 
@@ -209,7 +188,7 @@ const App: React.FC = () => {
         for (let i = 0; i < arr.length; i += size) results.push(arr.slice(i, i + size));
         return results;
     };
-    const wordChunks = chunkArray(newWordsData, BATCH_SIZE);
+    const wordChunks = chunkArray(newWords, BATCH_SIZE);
     let completedCount = 0;
 
     const processChunk = async (chunk: Word[]) => {
@@ -281,6 +260,16 @@ const App: React.FC = () => {
     setShowSearchDropdown(true);
   };
 
+  // Sync Feature: Handle restoring data from file
+  const handleRestoreData = (newWords: Word[]) => {
+      if (confirm('确定要导入备份吗？这将覆盖当前进度。建议先导出当前进度作为备份。')) {
+          setWords(newWords);
+          alert(`成功恢复 ${newWords.length} 个单词的进度！`);
+          setShowSettings(false);
+          setMode('list'); // Switch to list to see changes
+      }
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (mode !== 'study' || !currentWord) return;
@@ -293,115 +282,20 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [mode, currentWord, handleStatusChange, handleNext]);
 
-  const renderMainContent = () => {
-    if (mode === 'dictionary' && lookupTerm) {
-        return (
-            <div className="h-full bg-white/90 backdrop-blur-xl rounded-3xl shadow-xl border border-white overflow-hidden">
-                <DictionaryDetail term={lookupTerm} existingWord={words.find(w => w.term.toLowerCase() === lookupTerm.toLowerCase())} onAdd={handleAddToVocabulary} onRemove={handleDelete} onBack={() => setMode('list')} />
-            </div>
-        );
-    }
-
-    if (mode === 'import') {
-        return (
-            <div className="h-full flex items-center justify-center p-4">
-                <ImportModal onImport={handleImport} onLoadSample={handleLoadSample} isProcessing={enrichProgress !== null} />
-            </div>
-        );
-    }
-
-    if (mode === 'list') {
-        return (
-            <div className="h-full bg-white/60 backdrop-blur-md rounded-3xl shadow-sm border border-white/50 overflow-hidden">
-                <WordList words={words} onDelete={handleDelete} onEnrich={handleEnrichWord} onImport={handleImport} onLookup={handleLookup} onSelectWord={(w) => {setLookupTerm(w.term); setMode('dictionary');}} isEnriching={isLoading} searchTerm={searchTerm} />
-            </div>
-        );
-    }
-
-    if (mode === 'study') {
-        if (currentWord) {
-            return (
-                <div className="w-full h-full flex flex-col items-center justify-center">
-                    <div className="mb-4 flex items-center gap-2 px-3 py-1 bg-slate-200/50 rounded-full text-xs font-medium text-slate-500">
-                        {forceReviewMastered ? (
-                            <><RotateCcw size={12} className="text-indigo-500" /> 强化复习模式 (随机)</>
-                        ) : stats.due > 0 ? (
-                            <><Clock size={12} className="text-amber-500" /> 待复习: {stats.due}</>
-                        ) : (
-                            <><Sparkles size={12} className="text-indigo-500" /> 学习新词</>
-                        )}
-                    </div>
-                    <Flashcard key={currentWord.id} word={currentWord} onStatusChange={handleStatusChange} onNext={handleNext} />
-                </div>
-            );
-        } else {
-            // Dashboard / Empty State
-            return (
-                <div className="h-full flex flex-col items-center justify-center p-6 animate-in fade-in zoom-in duration-300">
-                    <div className="w-full max-w-sm bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white p-8 text-center relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-400 to-purple-400"></div>
-                        
-                        {forceReviewMastered ? (
-                             // All Mastered Words Reviewed!
-                             <>
-                                <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto mb-6 text-emerald-600 shadow-inner ring-4 ring-white">
-                                    <CheckCircle2 size={32} />
-                                </div>
-                                <h2 className="text-2xl font-bold text-slate-800 mb-2">复习完成!</h2>
-                                <p className="text-slate-500 text-sm mb-8">所有已掌握的单词都过了一遍。太棒了！</p>
-                                <button onClick={() => { setForceReviewMastered(false); setMode('list'); }} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg hover:scale-[1.02] transition-transform">
-                                    返回主页
-                                </button>
-                             </>
-                        ) : (
-                             // Daily Plan Done
-                             <>
-                                <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-6 text-indigo-600 shadow-inner ring-4 ring-white">
-                                    <TrendingUp size={32} />
-                                </div>
-                                <h2 className="text-2xl font-bold text-slate-800 mb-2">今日计划完成!</h2>
-                                <p className="text-slate-500 text-sm mb-8">目前没有急需复习的单词。</p>
-                                
-                                <div className="grid grid-cols-3 gap-3 mb-8">
-                                    <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
-                                        <div className="text-xl font-bold text-emerald-700">{stats.mastered}</div>
-                                        <div className="text-[10px] text-emerald-400 uppercase font-bold tracking-wider">已掌握</div>
-                                    </div>
-                                    <div className="bg-amber-50 p-3 rounded-xl border border-amber-100">
-                                        <div className="text-xl font-bold text-amber-700">{stats.learning}</div>
-                                        <div className="text-[10px] text-amber-400 uppercase font-bold tracking-wider">学习中</div>
-                                    </div>
-                                    <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100">
-                                        <div className="text-xl font-bold text-indigo-700">{stats.new}</div>
-                                        <div className="text-[10px] text-indigo-400 uppercase font-bold tracking-wider">新词</div>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-3">
-                                    <button onClick={() => setMode('list')} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold shadow-lg hover:scale-[1.02] transition-transform flex items-center justify-center gap-2">
-                                        <List size={18} /> 浏览词表
-                                    </button>
-                                    {stats.mastered > 0 && (
-                                        <button onClick={() => setForceReviewMastered(true)} className="w-full py-3 bg-white text-indigo-600 border border-indigo-100 rounded-xl font-bold hover:bg-indigo-50 transition-colors flex items-center justify-center gap-2">
-                                            <RotateCcw size={18} /> 复习已掌握 ({stats.mastered})
-                                        </button>
-                                    )}
-                                </div>
-                             </>
-                        )}
-                    </div>
-                </div>
-            );
-        }
-    }
-    return null;
-  };
-
   return (
     <div className="flex flex-col h-full bg-slate-50 text-slate-900 relative selection:bg-indigo-100 selection:text-indigo-700 font-sans">
       {showInstallGuide && <InstallGuide onClose={() => setShowInstallGuide(false)} isIOS={isIOS} />}
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      
+      {/* Settings Modal with Data Sync Props */}
+      {showSettings && (
+        <SettingsModal 
+            onClose={() => setShowSettings(false)} 
+            currentWords={words}
+            onRestoreData={handleRestoreData}
+        />
+      )}
 
+      {/* Softer Background Blobs */}
       <div className="fixed top-[-10%] left-[-10%] w-[500px] h-[500px] bg-indigo-100/60 rounded-full blur-[80px] pointer-events-none z-0"></div>
       <div className="fixed bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-purple-100/50 rounded-full blur-[80px] pointer-events-none z-0"></div>
 
@@ -458,7 +352,38 @@ const App: React.FC = () => {
         )}
 
         <div className="w-full h-full max-w-2xl mx-auto transition-all duration-500">
-          {renderMainContent()}
+          {mode === 'study' && (
+            currentWord ? (
+              <div className="w-full h-full flex flex-col items-center justify-center">
+                <Flashcard key={currentWord.id} word={currentWord} onStatusChange={handleStatusChange} onNext={handleNext} />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full">
+                <div className="text-6xl mb-4 animate-bounce">🎉</div>
+                <h2 className="text-2xl font-bold text-slate-800 mb-2">All Done!</h2>
+                <p className="text-slate-500 mb-6 text-sm">今天没有需要复习的单词了。</p>
+                <button onClick={() => setMode('list')} className="px-6 py-2 bg-slate-900 text-white rounded-full text-sm font-bold shadow-lg hover:scale-105 transition-transform">查看词表</button>
+              </div>
+            )
+          )}
+
+          {mode === 'list' && (
+            <div className="h-full bg-white/60 backdrop-blur-md rounded-3xl shadow-sm border border-white/50 overflow-hidden">
+              <WordList words={words} onDelete={handleDelete} onEnrich={handleEnrichWord} onImport={handleImport} onLookup={handleLookup} onSelectWord={(w) => {setLookupTerm(w.term); setMode('dictionary');}} isEnriching={isLoading} searchTerm={searchTerm} />
+            </div>
+          )}
+
+          {mode === 'import' && (
+            <div className="h-full flex items-center justify-center p-4">
+                <ImportModal onImport={handleImport} onLoadSample={handleLoadSample} isProcessing={enrichProgress !== null} />
+            </div>
+          )}
+
+          {mode === 'dictionary' && lookupTerm && (
+             <div className="h-full bg-white/90 backdrop-blur-xl rounded-3xl shadow-xl border border-white overflow-hidden">
+                 <DictionaryDetail term={lookupTerm} existingWord={words.find(w => w.term.toLowerCase() === lookupTerm.toLowerCase())} onAdd={handleAddToVocabulary} onRemove={handleDelete} onBack={() => setMode('list')} />
+             </div>
+          )}
         </div>
       </main>
 

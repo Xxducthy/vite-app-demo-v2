@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'kaoyan-vocab-v42'; // Version Bump to v42 (Remove Swipe)
+const CACHE_NAME = 'kaoyan-vocab-v40'; // Version Bump to v40 (Sync Edition)
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
