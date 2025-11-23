@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'kaoyan-vocab-v46'; // Version Bump to v46 (Hybrid Sync)
+const CACHE_NAME = 'kaoyan-vocab-v50'; // Version Bump to v50 (Nuclear Cache Clear)
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',

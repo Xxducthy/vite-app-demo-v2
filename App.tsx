@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Word, WordStatus, ViewMode, DictionaryEntry } from './types';
 import { INITIAL_WORDS, AUTOCOMPLETE_DICT } from './constants';
@@ -50,6 +51,16 @@ const App: React.FC = () => {
   // --- Effects ---
   useEffect(() => {
      const interval = setInterval(() => setNow(Date.now()), 30000);
+     console.log("App Version: v5.0 (Sync Force Updated)"); // Version Log
+     
+     // Force Refresh Logic: Check if we need to bust cache
+     const version = 'v5.0';
+     if (localStorage.getItem('app_version') !== version) {
+         localStorage.setItem('app_version', version);
+         // Optional: Force reload if major version change
+         // window.location.reload();
+     }
+     
      return () => clearInterval(interval);
   }, []);
 

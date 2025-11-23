@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Key, Database, Download, Upload, Monitor, Smartphone, ArrowRight, Trash2, Copy, ClipboardPaste, FileText, AlertTriangle, Check } from 'lucide-react';
+import { X, Key, Database, Download, Upload, Copy, ClipboardPaste, FileText, AlertTriangle, Check } from 'lucide-react';
 import { Word } from '../types';
 
 interface SettingsModalProps {
@@ -14,12 +14,8 @@ interface SettingsModalProps {
 export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWords, onRestoreData, onMergeData, onClearData }) => {
   const [apiKey, setApiKey] = useState('');
   const [activeTab, setActiveTab] = useState<'code' | 'file'>('code');
-  
-  // Code Sync State
   const [syncString, setSyncString] = useState('');
   const [copyMsg, setCopyMsg] = useState<{type: 'success'|'error', text: string} | null>(null);
-
-  // File Import State
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importMode, setImportMode] = useState<'restore' | 'merge'>('restore');
 
@@ -39,21 +35,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
               setCopyMsg({type: 'error', text: "没有数据"}); return;
           }
           const json = JSON.stringify(currentWords);
-          // Simple compression/encoding
           const code = btoa(unescape(encodeURIComponent(json)));
           
           if (code.length > 50000) {
-              setCopyMsg({type: 'error', text: "数据量过大，请切换到“文件同步”模式"});
-              // Optional: auto switch tab
-              // setActiveTab('file');
+              setCopyMsg({type: 'error', text: "数据量过大，请切换到“文件同步”"});
               return;
           }
 
           setSyncString(code);
           navigator.clipboard.writeText(code).then(() => {
-              setCopyMsg({type: 'success', text: "已复制到剪贴板！去微信粘贴。"});
+              setCopyMsg({type: 'success', text: "已复制！去微信粘贴。"});
           }).catch(() => {
-              setCopyMsg({type: 'success', text: "已生成，请手动全选复制。"});
+              setCopyMsg({type: 'success', text: "已生成，请手动复制。"});
           });
       } catch (e) {
           setCopyMsg({type: 'error', text: "生成失败"});
@@ -123,7 +116,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
         
         <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
             <Database size={24} className="text-indigo-600"/> 
-            数据同步
+            数据同步 v2.0
         </h2>
 
         <div className="flex gap-2 p-1 bg-slate-100 rounded-xl mb-6">
@@ -131,13 +124,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
                 onClick={() => setActiveTab('code')}
                 className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${activeTab === 'code' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
-                <Copy size={14} /> 文本码同步 (快)
+                <Copy size={14} /> 文本码 (快)
             </button>
             <button 
                 onClick={() => setActiveTab('file')}
                 className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${activeTab === 'file' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
-                <FileText size={14} /> 文件同步 (稳)
+                <FileText size={14} /> 文件 (稳)
             </button>
         </div>
 
@@ -146,7 +139,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
           {activeTab === 'code' && (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
                <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100 text-xs text-indigo-700 leading-relaxed">
-                  适用于<b>少量数据</b>快速同步。复制乱码 -> 微信发送 -> 粘贴导入。
+                  复制乱码 -> 微信发送 -> 粘贴导入。(仅限小数据量)
                </div>
                <textarea 
                   value={syncString}
@@ -173,7 +166,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
           {activeTab === 'file' && (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
                <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-xs text-emerald-700 leading-relaxed">
-                  适用于<b>大量数据</b>或备份。生成文件 -> 微信传输 -> 选择文件。
+                  生成文件 -> 微信发送 -> 选择文件。(适用于大量数据)
                </div>
                <div className="grid grid-cols-1 gap-3">
                     <button onClick={handleExport} className="flex items-center justify-between px-4 py-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors group">
