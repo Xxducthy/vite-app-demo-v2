@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Word, WordStatus, ViewMode, DictionaryEntry } from './types';
 import { INITIAL_WORDS, AUTOCOMPLETE_DICT } from './constants';

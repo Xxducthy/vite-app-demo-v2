@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'kaoyan-vocab-v42'; // Version Bump to v42 (Cloud Sync)
+const CACHE_NAME = 'kaoyan-vocab-v44'; // Version Bump to v44 (Offline Code Sync)
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',

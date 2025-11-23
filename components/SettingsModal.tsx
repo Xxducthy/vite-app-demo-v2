@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Save, Key, AlertTriangle, Database, Download, Upload, RefreshCw, Trash2, Cloud, Copy, Check, Settings } from 'lucide-react';
+import { X, Key, AlertTriangle, Database, Copy, Check, ClipboardPaste, ArrowRightLeft, Loader2, Trash2 } from 'lucide-react';
 import { Word } from '../types';
 
 interface SettingsModalProps {
@@ -13,10 +13,11 @@ interface SettingsModalProps {
 export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWords, onRestoreData, onMergeData, onClearData }) => {
   const [apiKey, setApiKey] = useState('');
   
-  // Cloud Sync State
-  const [syncCode, setSyncCode] = useState('');
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncMsg, setSyncMsg] = useState<{type: 'success' | 'error', text: string} | null>(null);
+  // Sync State
+  const [syncString, setSyncString] = useState('');
+  const [copySuccess, setCopySuccess] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   
   // File Import State
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -24,7 +25,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
 
   useEffect(() => {
     setApiKey(localStorage.getItem('custom_api_key') || '');
-    setSyncCode(localStorage.getItem('kaoyan_sync_code') || '');
   }, []);
 
   const handleSaveKey = () => {
@@ -32,94 +32,77 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
     window.location.reload(); 
   };
 
-  // --- CLOUD SYNC LOGIC (JSONBlob) ---
-  const API_BASE = 'https://jsonblob.com/api/jsonBlob';
+  // --- TEXT CODE SYNC LOGIC (Offline / No-VPN) ---
+  
+  const handleGenerateCode = () => {
+      setIsProcessing(true);
+      setErrorMsg(null);
+      setCopySuccess(false);
+      setSyncString('');
 
-  const handleCreateSyncCode = async () => {
-      setIsSyncing(true);
-      setSyncMsg(null);
+      // Use setTimeout to allow UI to render the spinner before the main thread blocks on JSON.stringify
+      setTimeout(() => {
+        try {
+            if (!currentWords || currentWords.length === 0) {
+                throw new Error("当前没有数据可导出");
+            }
+            // 1. Stringify
+            const json = JSON.stringify(currentWords);
+            // 2. Encode to Base64 (Handle Unicode strings correctly)
+            const code = btoa(unescape(encodeURIComponent(json)));
+            
+            setSyncString(code);
+        } catch (e: any) {
+            setErrorMsg(e.message || "生成失败：数据量过大");
+        } finally {
+            setIsProcessing(false);
+        }
+      }, 100);
+  };
+
+  const handleCopyCode = async () => {
+      if (!syncString) return;
       try {
-          // Create a new blob with current words
-          const response = await fetch(API_BASE, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-              body: JSON.stringify(currentWords || [])
-          });
-          
-          if (response.ok) {
-              const location = response.headers.get('Location');
-              if (location) {
-                  const newCode = location.split('/').pop(); // Extract ID
-                  if (newCode) {
-                      setSyncCode(newCode);
-                      localStorage.setItem('kaoyan_sync_code', newCode);
-                      setSyncMsg({ type: 'success', text: '同步码已生成！请在另一台设备输入此码。' });
-                  }
-              }
-          } else {
-              throw new Error('创建失败');
-          }
+          await navigator.clipboard.writeText(syncString);
+          setCopySuccess(true);
+          setTimeout(() => setCopySuccess(false), 2000);
       } catch (e) {
-          setSyncMsg({ type: 'error', text: '无法连接云服务，请检查网络。' });
-      } finally {
-          setIsSyncing(false);
+          setErrorMsg("复制失败，请手动全选复制");
       }
   };
 
-  const handleCloudUpload = async () => {
-      if (!syncCode) { setSyncMsg({ type: 'error', text: '请先生成或输入同步码' }); return; }
-      setIsSyncing(true);
-      setSyncMsg(null);
-      try {
-          const response = await fetch(`${API_BASE}/${syncCode}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-              body: JSON.stringify(currentWords || [])
-          });
-          if (response.ok) {
-              localStorage.setItem('kaoyan_sync_code', syncCode);
-              setSyncMsg({ type: 'success', text: '上传成功！进度已保存到云端。' });
-          } else {
-              setSyncMsg({ type: 'error', text: '上传失败，同步码可能无效。' });
-          }
-      } catch (e) {
-          setSyncMsg({ type: 'error', text: '网络错误，上传失败。' });
-      } finally {
-          setIsSyncing(false);
+  const handleImportCode = () => {
+      if (!syncString.trim()) {
+          setErrorMsg("请先粘贴进度码");
+          return;
       }
-  };
+      
+      setIsProcessing(true);
+      setErrorMsg(null);
 
-  const handleCloudDownload = async () => {
-      if (!syncCode) { setSyncMsg({ type: 'error', text: '请先输入同步码' }); return; }
-      setIsSyncing(true);
-      setSyncMsg(null);
-      try {
-          const response = await fetch(`${API_BASE}/${syncCode}`, {
-              method: 'GET',
-              headers: { 'Accept': 'application/json' }
-          });
-          if (response.ok) {
-              const json = await response.json();
-              if (Array.isArray(json) && onRestoreData) {
-                  localStorage.setItem('kaoyan_sync_code', syncCode);
-                  // Confirm before overwriting
-                  if (confirm(`云端找到 ${json.length} 个单词。\n确定要覆盖当前本机的进度吗？`)) {
-                      onRestoreData(json); 
-                      setSyncMsg({ type: 'success', text: '同步成功！' });
-                  } else {
-                      setSyncMsg({ type: 'success', text: '已取消覆盖。' });
-                  }
-              } else {
-                  setSyncMsg({ type: 'error', text: '云端数据格式错误。' });
-              }
-          } else {
-              setSyncMsg({ type: 'error', text: '找不到此同步码的数据。' });
-          }
-      } catch (e) {
-          setSyncMsg({ type: 'error', text: '网络错误，下载失败。' });
-      } finally {
-          setIsSyncing(false);
-      }
+      setTimeout(() => {
+        try {
+            // 1. Decode
+            const jsonStr = decodeURIComponent(escape(atob(syncString.trim())));
+            const json = JSON.parse(jsonStr);
+            
+            if (Array.isArray(json) && onRestoreData) {
+                // Small delay to ensure processing state renders before confirm dialog
+                setTimeout(() => {
+                    if (confirm(`解析成功！包含 ${json.length} 个单词。\n确定要覆盖当前进度吗？`)) {
+                        onRestoreData(json);
+                        setSyncString(''); // Clear after success
+                    }
+                    setIsProcessing(false);
+                }, 100);
+            } else {
+                throw new Error("格式错误");
+            }
+        } catch (e) {
+            setErrorMsg("无效的进度码，请确保复制完整");
+            setIsProcessing(false);
+        }
+      }, 100);
   };
 
   // --- FILE LOGIC ---
@@ -167,68 +150,90 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
         </button>
         
         <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
-            <Settings size={24} className="text-indigo-600"/> 
-            设置与同步
+            <Database size={24} className="text-indigo-600"/> 
+            数据同步与管理
         </h2>
 
         <div className="space-y-8">
           
-          {/* --- Cloud Sync Section --- */}
+          {/* --- Code Sync Section (Domestic Friendly) --- */}
           <div className="space-y-4 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100">
              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-indigo-600 font-bold text-sm uppercase tracking-wider">
-                    <Cloud size={16} />
-                    <span>云端同步 (免账号)</span>
+                    <ArrowRightLeft size={16} />
+                    <span>进度码同步 (无需梯子)</span>
                 </div>
-                {isSyncing && <RefreshCw size={16} className="animate-spin text-indigo-400" />}
              </div>
              
-             <div className="flex gap-2">
-                 <input 
-                    type="text" 
-                    value={syncCode}
-                    onChange={(e) => setSyncCode(e.target.value)}
-                    placeholder="输入或生成同步码"
-                    className="flex-1 p-2 text-center font-mono text-sm font-bold tracking-wider border border-slate-300 rounded-xl focus:border-indigo-500 outline-none bg-white"
+             <p className="text-xs text-slate-500 leading-relaxed">
+                无需联网。生成代码后，通过微信/QQ发给自己，在另一台设备粘贴导入。
+             </p>
+
+             <div className="relative">
+                 <textarea 
+                    value={syncString}
+                    onChange={(e) => setSyncString(e.target.value)}
+                    placeholder="在此处粘贴进度码，或点击下方生成..."
+                    className="w-full h-24 p-3 text-xs font-mono border border-slate-300 rounded-xl focus:border-indigo-500 outline-none bg-white resize-none"
                  />
-                 <button onClick={() => {navigator.clipboard.writeText(syncCode); alert('已复制')}} className="p-2 bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-indigo-600">
-                    <Copy size={18} />
-                 </button>
+                 {syncString && (
+                     <button 
+                        onClick={() => setSyncString('')}
+                        className="absolute top-2 right-2 text-slate-300 hover:text-slate-500"
+                     >
+                         <X size={14} />
+                     </button>
+                 )}
              </div>
 
-             <div className="grid grid-cols-2 gap-3">
-                 <button onClick={handleCloudUpload} disabled={isSyncing} className="flex items-center justify-center gap-2 bg-indigo-600 text-white py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors">
-                    <Upload size={14} /> 上传到云端
-                 </button>
-                 <button onClick={handleCloudDownload} disabled={isSyncing} className="flex items-center justify-center gap-2 bg-white text-indigo-600 border border-indigo-200 py-2 rounded-xl text-xs font-bold hover:bg-indigo-50 transition-colors">
-                    <Download size={14} /> 从云端下载
-                 </button>
-             </div>
-
-             {!syncCode && (
-                 <button onClick={handleCreateSyncCode} disabled={isSyncing} className="w-full py-2 text-xs text-slate-400 hover:text-indigo-500 font-medium underline">
-                     我是新设备，点击生成一个新的同步码
-                 </button>
+             {errorMsg && (
+                 <div className="text-xs text-rose-500 font-bold flex items-center gap-1">
+                     <AlertTriangle size={12} /> {errorMsg}
+                 </div>
              )}
 
-             {syncMsg && (
-                 <div className={`text-xs p-2 rounded-lg flex items-center gap-2 ${syncMsg.type === 'success' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-                     {syncMsg.type === 'success' ? <Check size={14} /> : <AlertTriangle size={14} />}
-                     {syncMsg.text}
-                 </div>
+             <div className="grid grid-cols-2 gap-3">
+                 <button 
+                    onClick={handleGenerateCode} 
+                    disabled={isProcessing}
+                    className="flex items-center justify-center gap-2 bg-white text-slate-700 border border-slate-200 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                 >
+                    {isProcessing && !syncString ? <Loader2 size={14} className="animate-spin"/> : null}
+                    {isProcessing && !syncString ? '生成中...' : '生成本机进度码'}
+                 </button>
+                 
+                 <button 
+                    onClick={handleImportCode} 
+                    disabled={isProcessing || !syncString}
+                    className="flex items-center justify-center gap-2 bg-indigo-600 text-white py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                 >
+                    {isProcessing && syncString ? <Loader2 size={14} className="animate-spin text-white"/> : <ClipboardPaste size={14} />} 
+                    {isProcessing && syncString ? '解析中...' : '读取并导入'}
+                 </button>
+             </div>
+             
+             {/* Copy Button (Only visible if there is text) */}
+             {syncString && !isProcessing && (
+                 <button 
+                    onClick={handleCopyCode}
+                    className={`w-full py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                        copySuccess ? 'bg-emerald-500 text-white' : 'bg-indigo-100 text-indigo-600 hover:bg-indigo-200'
+                    }`}
+                 >
+                    {copySuccess ? <><Check size={14} /> 已复制</> : <><Copy size={14} /> 复制进度码 (发给微信文件助手)</>}
+                 </button>
              )}
           </div>
 
           {/* --- File Backup Section --- */}
-          <div className="space-y-3">
-             <div className="flex items-center gap-2 text-slate-500 font-bold text-xs uppercase tracking-wider">
+          <div className="space-y-3 pt-2">
+             <div className="flex items-center gap-2 text-slate-400 font-bold text-xs uppercase tracking-wider">
                 <Database size={14} />
-                <span>本地文件备份</span>
+                <span>备用方式：文件备份</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
-                <button onClick={handleExport} className="py-2 bg-slate-50 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-100 border border-slate-200">导出文件</button>
-                <button onClick={() => handleImportClick('restore')} className="py-2 bg-slate-50 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-100 border border-slate-200">恢复备份</button>
-                <button onClick={() => handleImportClick('merge')} className="col-span-2 py-2 bg-slate-50 text-slate-500 rounded-lg text-xs font-bold hover:bg-slate-100 border border-slate-200">导入数据 (合并)</button>
+                <button onClick={handleExport} className="py-2 bg-slate-50 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-100 border border-slate-200">导出 JSON</button>
+                <button onClick={() => handleImportClick('restore')} className="py-2 bg-slate-50 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-100 border border-slate-200">导入 JSON</button>
                 <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
             </div>
           </div>
@@ -237,7 +242,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
           <div className="pt-4 border-t border-slate-100 space-y-3">
             <div className="flex items-center gap-2 text-slate-400 font-bold text-xs uppercase tracking-wider">
                 <Key size={14} />
-                <span>API Key (高级)</span>
+                <span>API Key</span>
             </div>
             <div className="flex gap-2">
                 <input 
