@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Key, AlertTriangle, Database, Copy, Check, ClipboardPaste, ArrowRightLeft, Loader2, Trash2 } from 'lucide-react';
+import { X, Key, Database, Download, Upload, Monitor, Smartphone, ArrowRight, Trash2, Copy, ClipboardPaste, FileText, AlertTriangle, Check } from 'lucide-react';
 import { Word } from '../types';
 
 interface SettingsModalProps {
@@ -12,13 +13,12 @@ interface SettingsModalProps {
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWords, onRestoreData, onMergeData, onClearData }) => {
   const [apiKey, setApiKey] = useState('');
+  const [activeTab, setActiveTab] = useState<'code' | 'file'>('code');
   
-  // Sync State
+  // Code Sync State
   const [syncString, setSyncString] = useState('');
-  const [copySuccess, setCopySuccess] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  
+  const [copyMsg, setCopyMsg] = useState<{type: 'success'|'error', text: string} | null>(null);
+
   // File Import State
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importMode, setImportMode] = useState<'restore' | 'merge'>('restore');
@@ -32,77 +32,50 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
     window.location.reload(); 
   };
 
-  // --- TEXT CODE SYNC LOGIC (Offline / No-VPN) ---
-  
+  // --- CODE SYNC LOGIC (Base64) ---
   const handleGenerateCode = () => {
-      setIsProcessing(true);
-      setErrorMsg(null);
-      setCopySuccess(false);
-      setSyncString('');
-
-      // Use setTimeout to allow UI to render the spinner before the main thread blocks on JSON.stringify
-      setTimeout(() => {
-        try {
-            if (!currentWords || currentWords.length === 0) {
-                throw new Error("当前没有数据可导出");
-            }
-            // 1. Stringify
-            const json = JSON.stringify(currentWords);
-            // 2. Encode to Base64 (Handle Unicode strings correctly)
-            const code = btoa(unescape(encodeURIComponent(json)));
-            
-            setSyncString(code);
-        } catch (e: any) {
-            setErrorMsg(e.message || "生成失败：数据量过大");
-        } finally {
-            setIsProcessing(false);
-        }
-      }, 100);
-  };
-
-  const handleCopyCode = async () => {
-      if (!syncString) return;
       try {
-          await navigator.clipboard.writeText(syncString);
-          setCopySuccess(true);
-          setTimeout(() => setCopySuccess(false), 2000);
+          if (!currentWords || currentWords.length === 0) {
+              setCopyMsg({type: 'error', text: "没有数据"}); return;
+          }
+          const json = JSON.stringify(currentWords);
+          // Simple compression/encoding
+          const code = btoa(unescape(encodeURIComponent(json)));
+          
+          // WeChat limit safeguard (approx ~20-50kb varies, setting conservative limit)
+          if (code.length > 50000) {
+              setCopyMsg({type: 'error', text: "数据量过大，请切换到“文件同步”模式"});
+              // Optional: auto switch tab
+              // setActiveTab('file');
+              return;
+          }
+
+          setSyncString(code);
+          navigator.clipboard.writeText(code).then(() => {
+              setCopyMsg({type: 'success', text: "已复制！去微信/QQ粘贴发送。"});
+          }).catch(() => {
+              setCopyMsg({type: 'success', text: "已生成，请手动全选复制。"});
+          });
       } catch (e) {
-          setErrorMsg("复制失败，请手动全选复制");
+          setCopyMsg({type: 'error', text: "生成失败"});
       }
   };
 
   const handleImportCode = () => {
-      if (!syncString.trim()) {
-          setErrorMsg("请先粘贴进度码");
-          return;
+      if (!syncString.trim()) { setCopyMsg({type: 'error', text: "请先粘贴代码"}); return; }
+      try {
+          const jsonStr = decodeURIComponent(escape(atob(syncString.trim())));
+          const json = JSON.parse(jsonStr);
+          if (Array.isArray(json) && onRestoreData) {
+              if(confirm(`识别到 ${json.length} 个单词。\n确定要覆盖当前进度吗？`)) {
+                  onRestoreData(json);
+                  setSyncString('');
+                  setCopyMsg({type: 'success', text: "同步成功！"});
+              }
+          } else { throw new Error(); }
+      } catch (e) {
+          setCopyMsg({type: 'error', text: "无效的进度码，内容可能不完整"});
       }
-      
-      setIsProcessing(true);
-      setErrorMsg(null);
-
-      setTimeout(() => {
-        try {
-            // 1. Decode
-            const jsonStr = decodeURIComponent(escape(atob(syncString.trim())));
-            const json = JSON.parse(jsonStr);
-            
-            if (Array.isArray(json) && onRestoreData) {
-                // Small delay to ensure processing state renders before confirm dialog
-                setTimeout(() => {
-                    if (confirm(`解析成功！包含 ${json.length} 个单词。\n确定要覆盖当前进度吗？`)) {
-                        onRestoreData(json);
-                        setSyncString(''); // Clear after success
-                    }
-                    setIsProcessing(false);
-                }, 100);
-            } else {
-                throw new Error("格式错误");
-            }
-        } catch (e) {
-            setErrorMsg("无效的进度码，请确保复制完整");
-            setIsProcessing(false);
-        }
-      }, 100);
   };
 
   // --- FILE LOGIC ---
@@ -113,7 +86,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `kaoyan_vocab_backup_${new Date().toISOString().split('T')[0]}.json`;
+    const date = new Date().toISOString().slice(5, 10).replace('-', '');
+    link.download = `考研进度_${date}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -132,11 +106,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
       try {
         const json = JSON.parse(event.target?.result as string);
         if (Array.isArray(json)) {
-            if (json.length > 0 && (!json[0].id && !json[0].term)) { alert("格式警告：未知结构"); return; }
             if (importMode === 'restore' && onRestoreData) onRestoreData(json);
             else if (importMode === 'merge' && onMergeData) onMergeData(json);
-        } else { alert("格式错误：非数组"); }
-      } catch (err) { alert("文件解析失败"); }
+        } else { alert("文件格式错误"); }
+      } catch (err) { alert("解析失败"); }
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
     reader.readAsText(file);
@@ -151,98 +124,96 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
         
         <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
             <Database size={24} className="text-indigo-600"/> 
-            数据同步与管理
+            数据同步
         </h2>
+
+        {/* Tabs */}
+        <div className="flex gap-2 p-1 bg-slate-100 rounded-xl mb-6">
+            <button 
+                onClick={() => {setActiveTab('code'); setCopyMsg(null);}}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${activeTab === 'code' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+                <Copy size={14} /> 文本码 (快)
+            </button>
+            <button 
+                onClick={() => setActiveTab('file')}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${activeTab === 'file' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+                <FileText size={14} /> 文件 (稳)
+            </button>
+        </div>
 
         <div className="space-y-8">
           
-          {/* --- Code Sync Section (Domestic Friendly) --- */}
-          <div className="space-y-4 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100">
-             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-indigo-600 font-bold text-sm uppercase tracking-wider">
-                    <ArrowRightLeft size={16} />
-                    <span>进度码同步 (无需梯子)</span>
-                </div>
-             </div>
-             
-             <p className="text-xs text-slate-500 leading-relaxed">
-                无需联网。生成代码后，通过微信/QQ发给自己，在另一台设备粘贴导入。
-             </p>
-
-             <div className="relative">
-                 <textarea 
-                    value={syncString}
-                    onChange={(e) => setSyncString(e.target.value)}
-                    placeholder="在此处粘贴进度码，或点击下方生成..."
-                    className="w-full h-24 p-3 text-xs font-mono border border-slate-300 rounded-xl focus:border-indigo-500 outline-none bg-white resize-none"
-                 />
-                 {syncString && (
-                     <button 
-                        onClick={() => setSyncString('')}
-                        className="absolute top-2 right-2 text-slate-300 hover:text-slate-500"
-                     >
-                         <X size={14} />
-                     </button>
-                 )}
-             </div>
-
-             {errorMsg && (
-                 <div className="text-xs text-rose-500 font-bold flex items-center gap-1">
-                     <AlertTriangle size={12} /> {errorMsg}
-                 </div>
-             )}
-
-             <div className="grid grid-cols-2 gap-3">
-                 <button 
-                    onClick={handleGenerateCode} 
-                    disabled={isProcessing}
-                    className="flex items-center justify-center gap-2 bg-white text-slate-700 border border-slate-200 py-2 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                 >
-                    {isProcessing && !syncString ? <Loader2 size={14} className="animate-spin"/> : null}
-                    {isProcessing && !syncString ? '生成中...' : '生成本机进度码'}
-                 </button>
-                 
-                 <button 
-                    onClick={handleImportCode} 
-                    disabled={isProcessing || !syncString}
-                    className="flex items-center justify-center gap-2 bg-indigo-600 text-white py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                 >
-                    {isProcessing && syncString ? <Loader2 size={14} className="animate-spin text-white"/> : <ClipboardPaste size={14} />} 
-                    {isProcessing && syncString ? '解析中...' : '读取并导入'}
-                 </button>
-             </div>
-             
-             {/* Copy Button (Only visible if there is text) */}
-             {syncString && !isProcessing && (
-                 <button 
-                    onClick={handleCopyCode}
-                    className={`w-full py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                        copySuccess ? 'bg-emerald-500 text-white' : 'bg-indigo-100 text-indigo-600 hover:bg-indigo-200'
-                    }`}
-                 >
-                    {copySuccess ? <><Check size={14} /> 已复制</> : <><Copy size={14} /> 复制进度码 (发给微信文件助手)</>}
-                 </button>
-             )}
-          </div>
-
-          {/* --- File Backup Section --- */}
-          <div className="space-y-3 pt-2">
-             <div className="flex items-center gap-2 text-slate-400 font-bold text-xs uppercase tracking-wider">
-                <Database size={14} />
-                <span>备用方式：文件备份</span>
+          {/* Tab 1: Code Sync */}
+          {activeTab === 'code' && (
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
+               <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100 text-xs text-indigo-700 leading-relaxed">
+                  适用于<b>小数据量</b>快速同步。复制生成的乱码 -> 发送给微信/QQ -> 在新设备粘贴导入。
+               </div>
+               <textarea 
+                  value={syncString}
+                  onChange={(e) => setSyncString(e.target.value)}
+                  placeholder="在此粘贴进度码..."
+                  className="w-full h-24 p-3 text-xs font-mono border border-slate-300 rounded-xl focus:border-indigo-500 outline-none bg-white resize-none"
+               />
+               {copyMsg && (
+                   <div className={`text-xs font-bold flex items-center gap-1 ${copyMsg.type === 'success' ? 'text-emerald-600' : 'text-rose-500'}`}>
+                       {copyMsg.type === 'success' ? <Check size={12}/> : <AlertTriangle size={12}/>} {copyMsg.text}
+                   </div>
+               )}
+               <div className="grid grid-cols-2 gap-3">
+                   <button onClick={handleGenerateCode} className="flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-700 py-2.5 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors">
+                       <Copy size={14} /> 生成并复制
+                   </button>
+                   <button onClick={handleImportCode} className="flex items-center justify-center gap-2 bg-indigo-600 text-white py-2.5 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors">
+                       <ClipboardPaste size={14} /> 识别并导入
+                   </button>
+               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-                <button onClick={handleExport} className="py-2 bg-slate-50 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-100 border border-slate-200">导出 JSON</button>
-                <button onClick={() => handleImportClick('restore')} className="py-2 bg-slate-50 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-100 border border-slate-200">导入 JSON</button>
-                <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
+          )}
+
+          {/* Tab 2: File Sync */}
+          {activeTab === 'file' && (
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
+               <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-xs text-emerald-700 leading-relaxed">
+                  适用于<b>大数据量</b>或长期备份。生成文件 -> 发送给微信/QQ -> 选择文件导入。
+               </div>
+               
+               <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-bold text-slate-700 flex items-center gap-2"><Monitor size={14}/> 旧设备</span>
+                      <ArrowRight size={14} className="text-slate-300"/>
+                      <span className="text-xs font-bold text-slate-700 flex items-center gap-2"><Smartphone size={14}/> 新设备</span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3">
+                        <button onClick={handleExport} className="flex items-center justify-between px-4 py-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors group">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-white p-2 rounded-lg shadow-sm text-slate-600"><Download size={18} /></div>
+                                <div className="text-left">
+                                    <div className="text-sm font-bold text-slate-700">1. 导出备份文件</div>
+                                </div>
+                            </div>
+                        </button>
+                        <button onClick={() => handleImportClick('restore')} className="flex items-center justify-between px-4 py-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors group">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-white p-2 rounded-lg shadow-sm text-slate-600"><Upload size={18} /></div>
+                                <div className="text-left">
+                                    <div className="text-sm font-bold text-slate-700">2. 导入备份文件</div>
+                                </div>
+                            </div>
+                        </button>
+                   </div>
+               </div>
+               <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
             </div>
-          </div>
+          )}
 
           {/* --- API Key Section --- */}
           <div className="pt-4 border-t border-slate-100 space-y-3">
             <div className="flex items-center gap-2 text-slate-400 font-bold text-xs uppercase tracking-wider">
                 <Key size={14} />
-                <span>API Key</span>
+                <span>DeepSeek API Key</span>
             </div>
             <div className="flex gap-2">
                 <input 
@@ -257,12 +228,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
           </div>
 
           {onClearData && (
-            <div className="pt-4 border-t border-slate-100 text-center">
+            <div className="pt-2 text-center">
                 <button 
-                    onClick={() => {if(confirm("确定要清空？")) onClearData();}}
-                    className="text-xs text-rose-400 hover:text-rose-600 flex items-center justify-center gap-1 mx-auto"
+                    onClick={() => {if(confirm("确定要清空所有背诵记录吗？")) onClearData();}}
+                    className="text-[10px] text-rose-300 hover:text-rose-500 underline"
                 >
-                    <Trash2 size={12} /> 危险：重置所有数据
+                    重置所有数据
                 </button>
             </div>
           )}
