@@ -34,10 +34,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
               setCopyMsg({type: 'error', text: "没有数据"}); return;
           }
           const json = JSON.stringify(currentWords);
+          // Simple compression/encoding
           const code = btoa(unescape(encodeURIComponent(json)));
           
           if (code.length > 50000) {
               setCopyMsg({type: 'error', text: "数据量过大，请切换到“文件同步”"});
+              // Optional: auto switch tab
+              // setActiveTab('file');
               return;
           }
 

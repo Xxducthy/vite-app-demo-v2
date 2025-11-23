@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Word, WordStatus, ViewMode, DictionaryEntry } from './types';
 import { INITIAL_WORDS, AUTOCOMPLETE_DICT } from './constants';
@@ -51,17 +50,16 @@ const App: React.FC = () => {
   // --- Effects ---
   useEffect(() => {
      const interval = setInterval(() => setNow(Date.now()), 30000);
-     console.log("App Version: v5.1 (Do-or-Die Update)"); 
+     console.log("App Version: v5.3 (Force Update Active)"); // Version Log
      
-     // Force Refresh Logic: Check if we need to bust cache on client side
-     const currentVersion = 'v5.1';
-     const savedVersion = localStorage.getItem('app_version_check');
-     if (savedVersion !== currentVersion) {
-         localStorage.setItem('app_version_check', currentVersion);
-         // Allow the SW unregistration in index.html to happen, then reload
-         setTimeout(() => {
+     // Force Refresh Check
+     const version = 'v5.3';
+     if (localStorage.getItem('app_version') !== version) {
+         localStorage.setItem('app_version', version);
+         // Force reload to apply new SW
+         if (window.confirm("应用已更新 (v5.3)，请点击确定以刷新页面。")) {
              window.location.reload();
-         }, 1000);
+         }
      }
      
      return () => clearInterval(interval);

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kaoyan-vocab-v51'; // Version Bump to v51 (Nuclear Reset)
+const CACHE_NAME = 'kaoyan-vocab-v53'; // Version Bump to v53 (Dual Mode)
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -10,12 +10,12 @@ const ASSETS_TO_CACHE = [
 
 // Install Event: Cache core files
 self.addEventListener('install', (event) => {
+  self.skipWaiting(); // Activate worker immediately
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS_TO_CACHE);
     })
   );
-  self.skipWaiting();
 });
 
 // Activate Event: Clean up old caches
@@ -31,7 +31,7 @@ self.addEventListener('activate', (event) => {
       );
     })
   );
-  self.clients.claim();
+  self.clients.claim(); // Become available to all pages
 });
 
 // Fetch Event: Stale-While-Revalidate for CDNs, Network First for API
@@ -39,7 +39,6 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
   // 1. Cache External Assets (Tailwind, React, Lucide Icons)
-  // This ensures the "App Shell" loads even if offline.
   if (
       url.hostname.includes('cdn') || 
       url.hostname.includes('icons8') ||
@@ -51,13 +50,11 @@ self.addEventListener('fetch', (event) => {
       caches.open(CACHE_NAME).then((cache) => {
         return cache.match(event.request).then((cachedResponse) => {
           const fetchPromise = fetch(event.request).then((networkResponse) => {
-            // Update cache with new version
             if(networkResponse.ok) {
                 cache.put(event.request, networkResponse.clone());
             }
             return networkResponse;
-          }).catch(() => cachedResponse); // If network fails, return cached (even if undefined, handled below)
-
+          }).catch(() => cachedResponse);
           return cachedResponse || fetchPromise;
         });
       })
@@ -65,12 +62,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2. Default Strategy for App Shell: Network First, Fallback to Cache
+  // 2. Default Strategy: Network First (to get new version), then Cache
   event.respondWith(
     fetch(event.request)
       .then((response) => {
         return caches.open(CACHE_NAME).then((cache) => {
-           // Don't cache API calls or browser-sync/hot-reload stuff
            if (event.request.url.startsWith('http') && event.request.method === 'GET') {
                cache.put(event.request, response.clone());
            }
