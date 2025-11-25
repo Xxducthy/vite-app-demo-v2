@@ -1,21 +1,32 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Word, WordStatus } from '../types';
-import { Volume2, Check, X, Repeat, Lightbulb } from 'lucide-react';
+import { Volume2, Check, X, Repeat, Lightbulb, RefreshCw, Trophy } from 'lucide-react';
 
 interface FlashcardProps {
   word: Word;
   onStatusChange: (id: string, status: WordStatus) => void;
   onNext: () => void;
+  sessionAttempts: number; // How many times seen in this session
+  repetitionCount: number; // How many consecutive correct (Streak)
 }
 
-export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNext }) => {
+export const Flashcard: React.FC<FlashcardProps> = ({ 
+  word, 
+  onStatusChange, 
+  onNext,
+  sessionAttempts,
+  repetitionCount
+}) => {
   const [isFlipped, setIsFlipped] = useState(false);
   
   // Touch/Swipe State
   const [touchStart, setTouchStart] = useState<{x: number, y: number} | null>(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
   
+  // Audio Ref to prevent Garbage Collection (Critical Fix)
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
   // Reset state when word changes
   useEffect(() => {
     setIsFlipped(false);
@@ -35,10 +46,18 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
   }, []);
 
   const speakText = (text: string) => {
+    // 1. Cancel pending
     window.speechSynthesis.cancel();
+    
+    // 2. Create new utterance
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'en-US';
     utterance.rate = 0.9;
+    
+    // 3. Store reference to prevent GC
+    utteranceRef.current = utterance;
+    
+    // 4. Speak
     window.speechSynthesis.speak(utterance);
   };
 
@@ -75,6 +94,30 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
   };
 
   const rotateDeg = swipeOffset * 0.05;
+
+  // Render Status Badge (Reusable)
+  const StatusBadge = () => (
+    <div className="absolute top-6 left-6 flex items-center gap-3 z-20">
+        {/* Session Attempts Counter (How many times recycled) */}
+        <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50/80 backdrop-blur border border-slate-100 rounded-lg text-slate-400" title="本轮循环次数">
+            <RefreshCw size={10} className={sessionAttempts > 0 ? "text-indigo-500" : ""} />
+            <span className="text-[10px] font-bold font-mono">{sessionAttempts + 1}</span>
+        </div>
+
+        {/* Mastery Streak Dots */}
+        <div className="flex items-center gap-1 px-2 py-1 bg-slate-50/80 backdrop-blur border border-slate-100 rounded-lg" title="熟练度">
+            <Trophy size={10} className={repetitionCount > 0 ? "text-amber-500" : "text-slate-300"} />
+            <div className="flex gap-0.5 ml-1">
+                {[...Array(3)].map((_, i) => (
+                    <div 
+                        key={i} 
+                        className={`w-1.5 h-1.5 rounded-full ${i < repetitionCount ? 'bg-amber-400' : 'bg-slate-200'}`}
+                    ></div>
+                ))}
+            </div>
+        </div>
+    </div>
+  );
 
   return (
     // Container
@@ -115,7 +158,9 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
             <div className="absolute inset-0 w-full h-full backface-hidden bg-white rounded-3xl shadow-[0_15px_40px_-10px_rgba(0,0,0,0.08)] border border-slate-100 flex flex-col items-center justify-center p-8 overflow-hidden z-10">
                 <div className="absolute top-0 left-8 right-8 h-1 bg-gradient-to-r from-indigo-300 via-purple-300 to-pink-300 rounded-b-full opacity-60"></div>
                 
-                <div className="absolute top-6 right-6">
+                <StatusBadge />
+
+                <div className="absolute top-6 right-6 z-20">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-50/80 px-2.5 py-1 rounded-full border border-slate-100 backdrop-blur-sm">
                     {word.tags.includes('高频') ? 'Core' : 'Word'}
                     </span>
@@ -128,7 +173,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
                     {word.phonetic && (
                     <button 
                         onClick={(e) => { e.stopPropagation(); speakText(word.term); }}
-                        className="flex items-center gap-2 px-4 py-2 bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 rounded-full transition-all active:scale-95 group/audio"
+                        className="flex items-center gap-2 px-4 py-2 bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 rounded-full transition-all active:scale-95 group/audio border border-slate-100"
                     >
                         <span className="text-base font-mono opacity-80 font-medium">{word.phonetic}</span>
                         <Volume2 size={16} className="group-hover/audio:animate-pulse" />
@@ -154,8 +199,10 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
                 className="absolute inset-0 w-full h-full backface-hidden bg-white rounded-3xl shadow-[0_15px_40px_-10px_rgba(0,0,0,0.08)] border border-slate-100 flex flex-col overflow-hidden"
                 style={{ transform: 'rotateY(180deg)' }}
             >
+                <StatusBadge />
+
                 {/* Header */}
-                <div className="flex justify-between items-center px-6 py-4 border-b border-slate-50 bg-white/80 backdrop-blur-sm z-10">
+                <div className="flex justify-between items-center px-6 py-4 pt-16 border-b border-slate-50 bg-white/80 backdrop-blur-sm z-10">
                     <div className="flex flex-col">
                         <h3 className="text-xl font-bold text-slate-800">{word.term}</h3>
                         {word.examSource && (

@@ -13,7 +13,7 @@ import { enrichWordWithAI, batchEnrichWords } from './services/geminiService';
 import { Book, List, Plus, GraduationCap, AlertCircle, Search, Download, Settings } from 'lucide-react';
 
 const STORAGE_KEY = 'kaoyan_vocab_progress_v1';
-const APP_VERSION = 'v6.2';
+const APP_VERSION = 'v6.3';
 
 const App: React.FC = () => {
   // --- State ---
@@ -47,6 +47,8 @@ const App: React.FC = () => {
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [sessionQueue, setSessionQueue] = useState<string[]>([]); // Stores IDs of words in current session
   const [hasFinishedSession, setHasFinishedSession] = useState(false);
+  // NEW: Track how many times a word has been shown in THIS session
+  const [sessionStats, setSessionStats] = useState<Record<string, number>>({});
 
   // --- Derived State ---
   // Global Queue (All words due) sorted by Priority
@@ -109,6 +111,7 @@ const App: React.FC = () => {
       // Pick the top 'count' words from the priority-sorted global queue
       const queueIds = globalStudyQueue.slice(0, count).map(w => w.id);
       setSessionQueue(queueIds);
+      setSessionStats({}); // Reset session stats
       setIsSessionActive(true);
       setHasFinishedSession(false);
   };
@@ -116,12 +119,19 @@ const App: React.FC = () => {
   const handleExitSession = () => {
       setIsSessionActive(false);
       setSessionQueue([]);
+      setSessionStats({});
       setHasFinishedSession(false);
       if (mode === 'study') setMode('list');
   };
 
   // --- ADAPTIVE SRS & LOOP LOGIC (CORE FUNCTION) ---
   const handleStatusChange = useCallback((id: string, actionStatus: WordStatus) => {
+    // 1. Update Session Stats (Increment attempt count for this word)
+    setSessionStats(prev => ({
+        ...prev,
+        [id]: (prev[id] || 0) + 1
+    }));
+
     setWords(prev => prev.map(w => {
       if (w.id !== id) return w;
 
@@ -478,8 +488,15 @@ const App: React.FC = () => {
                  />
              ) : currentWord ? (
                 <div className="w-full h-full flex flex-col items-center justify-center">
-                   <Flashcard key={currentWord.id} word={currentWord} onStatusChange={handleStatusChange} onNext={handleNext} />
-                   <div className="absolute bottom-8 text-xs text-slate-300 font-medium">
+                   <Flashcard 
+                      key={currentWord.id} 
+                      word={currentWord} 
+                      sessionAttempts={sessionStats[currentWord.id] || 0}
+                      repetitionCount={currentWord.repetitions}
+                      onStatusChange={handleStatusChange} 
+                      onNext={handleNext} 
+                   />
+                   <div className="absolute bottom-8 text-xs text-slate-300 font-medium bg-white/50 px-3 py-1 rounded-full border border-slate-100 backdrop-blur-sm shadow-sm">
                        本组剩余: {sessionQueue.length}
                    </div>
                 </div>
