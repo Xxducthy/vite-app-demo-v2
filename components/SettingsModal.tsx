@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Key, Database, Download, Upload, Copy, ClipboardPaste, FileText, AlertTriangle, Check } from 'lucide-react';
 import { Word } from '../types';
@@ -8,9 +9,10 @@ interface SettingsModalProps {
   onRestoreData?: (words: Word[]) => void;
   onMergeData?: (words: Word[]) => void;
   onClearData?: () => void;
+  appVersion?: string;
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWords, onRestoreData, onMergeData, onClearData }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWords, onRestoreData, onMergeData, onClearData, appVersion }) => {
   const [apiKey, setApiKey] = useState('');
   const [activeTab, setActiveTab] = useState<'code' | 'file'>('code');
   const [syncString, setSyncString] = useState('');
@@ -141,7 +143,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
           {activeTab === 'code' && (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
                <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100 text-xs text-indigo-700 leading-relaxed">
-                  复制乱码 -> 微信发送 -> 粘贴导入。(仅限小数据量)
+                  复制乱码 → 微信发送 → 粘贴导入。(仅限小数据量)
                </div>
                <textarea 
                   value={syncString}
@@ -168,7 +170,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
           {activeTab === 'file' && (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
                <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-xs text-emerald-700 leading-relaxed">
-                  生成文件 -> 微信发送 -> 选择文件。(适用于大量数据)
+                  生成文件 → 微信发送 → 选择文件。(适用于大量数据)
                </div>
                <div className="grid grid-cols-1 gap-3">
                     <button onClick={handleExport} className="flex items-center justify-between px-4 py-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors group">
@@ -220,6 +222,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
                 >
                     重置所有数据
                 </button>
+            </div>
+          )}
+          
+          {appVersion && (
+            <div className="mt-6 text-center text-[10px] text-slate-300 font-mono">
+               {appVersion}
             </div>
           )}
 

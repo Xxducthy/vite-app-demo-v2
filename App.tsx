@@ -13,6 +13,7 @@ import { enrichWordWithAI, batchEnrichWords } from './services/geminiService';
 import { Book, List, Plus, GraduationCap, AlertCircle, Search, Download, Settings } from 'lucide-react';
 
 const STORAGE_KEY = 'kaoyan_vocab_progress_v1';
+const APP_VERSION = 'v6.1';
 
 const App: React.FC = () => {
   // --- State ---
@@ -44,30 +45,30 @@ const App: React.FC = () => {
 
   // --- Session State ---
   const [isSessionActive, setIsSessionActive] = useState(false);
-  const [sessionQueue, setSessionQueue] = useState<string[]>([]); // Stores IDs
+  const [sessionQueue, setSessionQueue] = useState<string[]>([]); // Stores IDs of words in current session
   const [hasFinishedSession, setHasFinishedSession] = useState(false);
 
   // --- Derived State ---
-  // Global Queue (All words due)
+  // Global Queue (All words due) sorted by Priority
   const globalStudyQueue = words
     .filter(w => w.nextReview <= now)
     .sort((a, b) => {
         // Priority 1: Interval 0 (Forgotten/New) words first
+        // This ensures the most difficult words appear immediately in the next session setup
         if (a.interval === 0 && b.interval !== 0) return -1;
         if (a.interval !== 0 && b.interval === 0) return 1;
-        // Priority 2: Overdue amount
+        // Priority 2: Overdue amount (Ascending order of nextReview, i.e., most overdue first)
         return a.nextReview - b.nextReview;
     });
 
-  // Current Word Logic
+  // Current Word Logic for the Flashcard View
   const currentWordId = isSessionActive && sessionQueue.length > 0 ? sessionQueue[0] : null;
   const currentWord = currentWordId ? words.find(w => w.id === currentWordId) : null;
   
   // --- Effects ---
   useEffect(() => {
      const interval = setInterval(() => setNow(Date.now()), 30000);
-     console.log("App Version: v5.6 (Adaptive Loop Fixed)"); 
-     
+     console.log(`App Version: ${APP_VERSION} (Adaptive SRS & Loop Active)`); 
      return () => clearInterval(interval);
   }, []);
 
@@ -105,7 +106,7 @@ const App: React.FC = () => {
   };
 
   const handleStartSession = (count: number) => {
-      // Logic: Prioritize 0-interval words, then normal due words
+      // Pick the top 'count' words from the priority-sorted global queue
       const queueIds = globalStudyQueue.slice(0, count).map(w => w.id);
       setSessionQueue(queueIds);
       setIsSessionActive(true);
@@ -119,7 +120,7 @@ const App: React.FC = () => {
       if (mode === 'study') setMode('list');
   };
 
-  // --- ADAPTIVE SRS & LOOP LOGIC ---
+  // --- ADAPTIVE SRS & LOOP LOGIC (CORE FUNCTION) ---
   const handleStatusChange = useCallback((id: string, actionStatus: WordStatus) => {
     setWords(prev => prev.map(w => {
       if (w.id !== id) return w;
@@ -127,46 +128,48 @@ const App: React.FC = () => {
       const currentTime = Date.now();
       let { interval, easeFactor, repetitions } = w;
       
-      // --- Adaptive Logic ---
+      // --- Adaptive Algorithm ---
       if (actionStatus === WordStatus.New) {
-          // "Forgot": Reset
+          // "Forgot": RESET
+          // If user forgot, reset interval to 0 (Immediate Review) and make it harder (E=1.3)
           easeFactor = 1.3;
           interval = 0;
           repetitions = 0;
       } 
       else if (actionStatus === WordStatus.Learning) {
-          // "Blurry": Harder, decrease E
+          // "Blurry": HARDER
+          // Decrease Ease Factor (min 1.3). 
           easeFactor = Math.max(1.3, easeFactor - 0.1);
-          repetitions = 0; // Treat as re-learning
+          repetitions = 0; // Reset consecutive reps as it wasn't a perfect recall
           
-          // Calculate interval: If it was 0, set to very short (e.g. 0.5 days), else grow slowly
-          // But since this is "Blurry", we effectively want to see it soon.
-          // For the sake of the algorithm, we calculate a future date, 
-          // BUT the Loop Logic below will force it to reappear in THIS session anyway.
-          interval = interval === 0 ? 0.2 : interval * 0.8; 
+          // Interval adjustment:
+          // Even though we loop it in the session, we set the *future* interval.
+          // Since it's blurry, we want to see it relatively soon after this session.
+          interval = interval === 0 ? 0 : interval * 0.5; 
       } 
       else if (actionStatus === WordStatus.Mastered) {
-          // "Master": Easier, increase E
+          // "Remember": EASIER
+          // Increase Ease Factor
           easeFactor = easeFactor + 0.1;
           repetitions += 1;
           
-          // Calculate new interval
+          // Calculate new interval (Standard SM-2 style logic)
           if (interval === 0) interval = 1; // First success -> 1 day
-          else if (interval < 1) interval = 1; // From fractional -> 1 day
+          else if (interval < 1) interval = 1; 
           else interval = Math.round(interval * easeFactor);
       }
 
       // --- Next Review Calculation ---
       let nextReview = currentTime;
       if (interval === 0) {
-          // Forgot: Due immediately
+          // If interval is 0, it is due immediately. 
+          // (Though Session Loop handles immediate reappearance)
           nextReview = currentTime; 
       } else {
-          // Future date
           nextReview = currentTime + (interval * 24 * 60 * 60 * 1000);
       }
 
-      // Update Visual Status Label
+      // Update Visual Status Label based on mastery level
       let newStatus = WordStatus.New;
       if (repetitions > 0) newStatus = WordStatus.Learning;
       if (interval >= 21) newStatus = WordStatus.Mastered;
@@ -182,19 +185,21 @@ const App: React.FC = () => {
       };
     }));
     
-    // --- Session Queue Loop Logic ---
+    // --- SESSION QUEUE LOOP LOGIC ---
     setSessionQueue(prev => {
-        // Remove current word from front
+        // 1. Remove the current word (head of queue)
         const rest = prev.slice(1);
         
+        // 2. Check Action
         if (actionStatus === WordStatus.Mastered) {
-            // Success: Word is done for this session
+            // Success: Word is removed from session
             if (rest.length === 0) {
                 setHasFinishedSession(true);
             }
             return rest;
         } else {
-            // Failure/Blurry: Push current ID to back of queue (Loop)
+            // Failure (Forget) or Blurry: RECYCLE
+            // Push the current ID to the BACK of the queue
             return [...rest, id];
         }
     });
@@ -341,7 +346,6 @@ const App: React.FC = () => {
     setShowSearchDropdown(true);
   };
 
-  // --- SYNC & DATA MANAGEMENT HANDLERS ---
   const handleRestoreData = (newWords: Word[]) => {
       setWords(newWords);
       alert(`同步完成！共 ${newWords.length} 个单词。`);
@@ -388,7 +392,6 @@ const App: React.FC = () => {
     <div className="flex flex-col h-full bg-slate-50 text-slate-900 relative selection:bg-indigo-100 selection:text-indigo-700 font-sans">
       {showInstallGuide && <InstallGuide onClose={() => setShowInstallGuide(false)} isIOS={isIOS} />}
       
-      {/* Settings Modal with Data Sync Props */}
       {showSettings && (
         <SettingsModal 
             onClose={() => setShowSettings(false)} 
@@ -396,6 +399,7 @@ const App: React.FC = () => {
             onRestoreData={handleRestoreData}
             onMergeData={handleMergeData}
             onClearData={handleClearData}
+            appVersion={APP_VERSION}
         />
       )}
 
@@ -480,7 +484,6 @@ const App: React.FC = () => {
                    </div>
                 </div>
              ) : (
-                // Fallback / Just finished queue transition
                 <div className="flex items-center justify-center h-full">
                    <div className="animate-spin text-indigo-200"><Settings size={32} /></div>
                 </div>
@@ -500,26 +503,16 @@ const App: React.FC = () => {
           )}
 
           {mode === 'dictionary' && lookupTerm && (
-             <div className="h-full bg-white/90 backdrop-blur-xl rounded-3xl shadow-xl border border-white overflow-hidden">
-                 <DictionaryDetail term={lookupTerm} existingWord={words.find(w => w.term.toLowerCase() === lookupTerm.toLowerCase())} onAdd={handleAddToVocabulary} onRemove={handleDelete} onBack={() => setMode('list')} />
-             </div>
+            <DictionaryDetail 
+               term={lookupTerm}
+               existingWord={words.find(w => w.term.toLowerCase() === lookupTerm.toLowerCase())}
+               onAdd={handleAddToVocabulary}
+               onRemove={handleDelete}
+               onBack={() => { setMode('list'); setLookupTerm(null); }}
+            />
           )}
         </div>
       </main>
-
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
-        <nav className="bg-white/90 backdrop-blur-xl p-1.5 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-white flex gap-1">
-          <button onClick={() => setMode('study')} className={`px-5 py-2.5 rounded-full transition-all flex items-center gap-2 text-sm font-bold ${mode === 'study' ? 'bg-slate-900 text-white shadow-md' : 'text-slate-400 hover:bg-slate-50'}`}>
-            <Book size={18} /> {mode === 'study' && 'Study'}
-          </button>
-          <button onClick={() => setMode('import')} className={`p-2.5 rounded-full transition-all ${mode === 'import' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400 hover:bg-slate-50'}`}>
-            <Plus size={20} />
-          </button>
-          <button onClick={() => setMode('list')} className={`p-2.5 rounded-full transition-all ${mode === 'list' || mode === 'dictionary' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400 hover:bg-slate-50'}`}>
-            <List size={20} />
-          </button>
-        </nav>
-      </div>
     </div>
   );
 };

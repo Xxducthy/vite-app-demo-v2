@@ -69,13 +69,14 @@
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           try {
-              // 1. Attempt to register
-              navigator.serviceWorker.register('/sw.js').then(reg => {
-                // Check for updates
-                reg.update().catch(() => {});
-              }).catch(err => {
-                // Squelch errors for preview envs
-              });
+              // Only register if not in a restricted iframe/sandbox that blocks SW
+              if (window.location.protocol.startsWith('http')) {
+                  navigator.serviceWorker.register('/sw.js').then(reg => {
+                    reg.update().catch(() => {});
+                  }).catch(err => {
+                    console.warn('SW registration failed, possibly offline or restricted env:', err);
+                  });
+              }
           } catch (e) {
               console.log('SW disabled in this environment');
           }
