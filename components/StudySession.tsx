@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Play, CheckCircle2, Coffee, ArrowRight, Layers, Shuffle, RotateCcw, Dumbbell } from 'lucide-react';
+import { Play, CheckCircle2, Coffee, ArrowRight, Layers, Shuffle, RotateCcw, Dumbbell, Zap, AlertTriangle } from 'lucide-react';
 
 interface StudySessionProps {
   totalDue: number;
@@ -10,6 +10,9 @@ interface StudySessionProps {
   isFinished?: boolean;
   onContinue?: () => void;
   onReviewAgain?: () => void;
+  nextBatchSize?: number;
+  sessionDirectCount?: number;
+  sessionStruggleCount?: number;
 }
 
 export const StudySession: React.FC<StudySessionProps> = ({ 
@@ -19,7 +22,10 @@ export const StudySession: React.FC<StudySessionProps> = ({
   onExit,
   isFinished,
   onContinue,
-  onReviewAgain
+  onReviewAgain,
+  nextBatchSize = 20,
+  sessionDirectCount = 0,
+  sessionStruggleCount = 0
 }) => {
   
   // --- SESSION COMPLETE VIEW ---
@@ -31,18 +37,34 @@ export const StudySession: React.FC<StudySessionProps> = ({
         </div>
         
         <h2 className="text-3xl font-black text-slate-800 mb-2">本组闯关成功!</h2>
-        <p className="text-slate-500 mb-10 text-center max-w-xs">
-           您已掌握这组单词。接下来做什么？
+        <p className="text-slate-500 mb-6 text-center max-w-xs">
+           您已掌握这组单词。
         </p>
+
+        {/* Stats Dashboard */}
+        <div className="flex gap-4 mb-8 w-full max-w-xs">
+            <div className="flex-1 bg-emerald-50 border border-emerald-100 rounded-2xl p-3 flex flex-col items-center">
+                <span className="text-2xl font-black text-emerald-600">{sessionDirectCount}</span>
+                <div className="flex items-center gap-1 text-[10px] text-emerald-600/70 font-bold uppercase tracking-wide mt-1">
+                    <Zap size={10} fill="currentColor" /> 秒杀通过
+                </div>
+            </div>
+            <div className="flex-1 bg-amber-50 border border-amber-100 rounded-2xl p-3 flex flex-col items-center">
+                <span className="text-2xl font-black text-amber-600">{sessionStruggleCount}</span>
+                <div className="flex items-center gap-1 text-[10px] text-amber-600/70 font-bold uppercase tracking-wide mt-1">
+                    <AlertTriangle size={10} fill="currentColor" /> 重点循环
+                </div>
+            </div>
+        </div>
 
         <div className="flex flex-col gap-3 w-full max-w-xs">
            {/* Priority 1: Continue to Next Batch if available */}
            {totalDue > 0 && onContinue && (
                <button 
                   onClick={onContinue}
-                  className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-lg shadow-xl shadow-indigo-200 flex items-center justify-center gap-2 transition-transform active:scale-95"
+                  className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-lg shadow-xl shadow-indigo-200 flex items-center justify-center gap-2 transition-transform active:scale-95 group"
                 >
-                  继续下一组 <ArrowRight size={20} />
+                  继续下一组 ({nextBatchSize}个) <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                </button>
            )}
            

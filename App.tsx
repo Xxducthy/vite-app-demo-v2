@@ -13,7 +13,7 @@ import { enrichWordWithAI, batchEnrichWords } from './services/geminiService';
 import { Book, List, Plus, GraduationCap, AlertCircle, Search, Download, Settings } from 'lucide-react';
 
 const STORAGE_KEY = 'kaoyan_vocab_progress_v1';
-const APP_VERSION = 'v6.7 (Smart Loop)';
+const APP_VERSION = 'v6.8 (Auto-Next)';
 
 const App: React.FC = () => {
   // --- State ---
@@ -49,6 +49,7 @@ const App: React.FC = () => {
   const [sessionInitialCount, setSessionInitialCount] = useState(0); // For Progress Bar
   const [lastSessionIds, setLastSessionIds] = useState<string[]>([]); // For "Review Again"
   const [hasFinishedSession, setHasFinishedSession] = useState(false);
+  const [lastBatchSize, setLastBatchSize] = useState(20); // Remember user preference
   
   // Track consecutive correct answers WITHIN the current session for penalty words
   // Key: Word ID, Value: Streak Count (0, 1, 2...). If undefined, it means word hasn't entered penalty loop yet.
@@ -132,6 +133,8 @@ const App: React.FC = () => {
       } else {
           // Normal Start: Number
           const count = countOrIds;
+          setLastBatchSize(count); // Save preference
+          
           if (isCram) {
               // Cram Mode: Shuffle ALL words and pick 'count'
               const shuffled = [...words].sort(() => 0.5 - Math.random());
@@ -316,6 +319,12 @@ const App: React.FC = () => {
   // --- Progress Bar Calculation ---
   const masteredCount = Math.max(0, sessionInitialCount - sessionQueue.length);
   const progressPercent = sessionInitialCount > 0 ? (masteredCount / sessionInitialCount) * 100 : 0;
+  
+  // Stats Calculation for Summary
+  // Struggled = Number of words that exist in sessionLearningStreaks (meaning they entered penalty loop)
+  const struggleCount = Object.keys(sessionLearningStreaks).length;
+  // Direct = Total - Struggled
+  const directCount = Math.max(0, sessionInitialCount - struggleCount);
 
   return (
     <div className="flex flex-col h-full bg-slate-50 text-slate-900 relative selection:bg-indigo-100 selection:text-indigo-700 font-sans">
@@ -391,7 +400,10 @@ const App: React.FC = () => {
                     onExit={() => { setMode('list'); setHasFinishedSession(false); }}
                     // Special Props for Summary Actions
                     isFinished={true}
-                    onContinue={() => handleStartSession(20, false)} // Start Next Batch
+                    nextBatchSize={lastBatchSize}
+                    sessionDirectCount={directCount}
+                    sessionStruggleCount={struggleCount}
+                    onContinue={() => handleStartSession(lastBatchSize, false)} // Start Next Batch with Same Size
                     onReviewAgain={() => handleStartSession(lastSessionIds, true)} // Review Same IDs
                  />
              ) : currentWord ? (
