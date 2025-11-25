@@ -1,10 +1,11 @@
 
 import React from 'react';
-import { Play, CheckCircle2, Coffee, ArrowRight, Layers } from 'lucide-react';
+import { Play, CheckCircle2, Coffee, ArrowRight, Layers, Shuffle, RotateCcw, Dumbbell } from 'lucide-react';
 
 interface StudySessionProps {
   totalDue: number;
-  onStartSession: (count: number) => void;
+  totalWords: number; // New prop to distinguish "Empty Library" vs "Done for day"
+  onStartSession: (count: number, isCram?: boolean) => void; // Updated signature
   onExit: () => void;
   // For Summary View
   isFinished?: boolean;
@@ -13,6 +14,7 @@ interface StudySessionProps {
 
 export const StudySession: React.FC<StudySessionProps> = ({ 
   totalDue, 
+  totalWords,
   onStartSession, 
   onExit,
   isFinished,
@@ -29,7 +31,7 @@ export const StudySession: React.FC<StudySessionProps> = ({
         
         <h2 className="text-3xl font-black text-slate-800 mb-2">本组完成!</h2>
         <p className="text-slate-500 mb-10 text-center max-w-xs">
-           休息一下，或者继续下一组单词的学习。
+           休息一下，或者继续学习。
         </p>
 
         <div className="flex flex-col gap-4 w-full max-w-xs">
@@ -41,9 +43,12 @@ export const StudySession: React.FC<StudySessionProps> = ({
                   继续下一组 <ArrowRight size={20} />
                </button>
            ) : (
-               <div className="text-center py-2 text-indigo-600 font-bold bg-indigo-50 rounded-xl">
-                   🎉 今日任务全部完成！
-               </div>
+               <button 
+                  onClick={() => onStartSession(20, true)} // Start Cram Session
+                  className="w-full py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl font-bold text-lg shadow-xl shadow-amber-200 flex items-center justify-center gap-2 transition-transform active:scale-95"
+                >
+                  <RotateCcw size={20} /> 再来一组 (巩固)
+               </button>
            )}
            
            <button 
@@ -59,43 +64,80 @@ export const StudySession: React.FC<StudySessionProps> = ({
 
   // --- SESSION SETUP VIEW ---
   const options = [10, 20, 30, 50];
+  const isAllCaughtUp = totalDue === 0;
 
   return (
     <div className="w-full h-full flex flex-col items-center justify-center p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="bg-white/80 backdrop-blur-xl border border-white p-8 rounded-[2rem] shadow-2xl shadow-indigo-100 w-full max-w-sm text-center">
-         <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-6 text-indigo-600 transform -rotate-6">
-            <Layers size={32} />
+         <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 transform -rotate-6 ${isAllCaughtUp ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-50 text-indigo-600'}`}>
+            {isAllCaughtUp ? <CheckCircle2 size={32} /> : <Layers size={32} />}
          </div>
          
-         <h2 className="text-2xl font-black text-slate-800 mb-2">准备好学习了吗?</h2>
+         <h2 className="text-2xl font-black text-slate-800 mb-2">
+            {isAllCaughtUp ? "今日任务已完成!" : "准备好学习了吗?"}
+         </h2>
          <p className="text-slate-500 mb-8 font-medium">
-            当前共有 <span className="text-indigo-600 font-bold text-lg">{totalDue}</span> 个单词待复习
+            {isAllCaughtUp 
+                ? "您已完成所有待复习单词。" 
+                : <><span className="text-indigo-600 font-bold text-lg">{totalDue}</span> 个单词待复习</>
+            }
          </p>
 
-         <div className="space-y-3">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">选择本组学习数量</p>
-            <div className="grid grid-cols-2 gap-3">
-                {options.map(num => (
-                    <button
-                        key={num}
-                        onClick={() => onStartSession(num)}
-                        disabled={totalDue === 0}
-                        className="py-3 rounded-xl border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 font-bold transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {num} 个
-                    </button>
-                ))}
-            </div>
-            
-            <button
-                onClick={() => onStartSession(totalDue)}
-                disabled={totalDue === 0}
-                className="w-full py-4 mt-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
-            >
-                <Play size={18} fill="currentColor" />
-                全部背诵 ({totalDue})
-            </button>
-         </div>
+         {/* Normal Review Mode */}
+         {!isAllCaughtUp && (
+             <div className="space-y-3">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">选择本组学习数量</p>
+                <div className="grid grid-cols-2 gap-3">
+                    {options.map(num => (
+                        <button
+                            key={num}
+                            onClick={() => onStartSession(num, false)}
+                            className="py-3 rounded-xl border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 font-bold transition-all active:scale-95"
+                        >
+                            {num} 个
+                        </button>
+                    ))}
+                </div>
+                
+                <button
+                    onClick={() => onStartSession(totalDue, false)}
+                    className="w-full py-4 mt-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95"
+                >
+                    <Play size={18} fill="currentColor" />
+                    全部背诵 ({totalDue})
+                </button>
+             </div>
+         )}
+
+         {/* Cram / Consolidation Mode (Shown when caught up OR explicitly wanted) */}
+         {isAllCaughtUp && totalWords > 0 && (
+             <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2">
+                <div className="flex items-center gap-2 justify-center text-amber-500 mb-2 opacity-80">
+                    <Dumbbell size={16} />
+                    <span className="text-xs font-bold uppercase tracking-widest">巩固复习模式</span>
+                </div>
+                <button
+                    onClick={() => onStartSession(20, true)}
+                    className="w-full py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold shadow-lg shadow-amber-200 flex items-center justify-center gap-2 transition-all active:scale-95"
+                >
+                    <Shuffle size={18} />
+                    随机复习 20 个
+                </button>
+                <button
+                    onClick={() => onStartSession(totalWords, true)}
+                    className="w-full py-3 bg-white border border-amber-200 text-amber-600 rounded-xl font-bold hover:bg-amber-50 flex items-center justify-center gap-2 transition-all active:scale-95"
+                >
+                    全部巩固 ({totalWords})
+                </button>
+             </div>
+         )}
+         
+         {totalWords === 0 && (
+             <div className="text-slate-400 text-sm py-4">
+                 词库为空，请先添加单词。
+             </div>
+         )}
+
       </div>
       
       <button onClick={onExit} className="mt-8 text-slate-400 hover:text-slate-600 text-sm font-medium underline underline-offset-4">

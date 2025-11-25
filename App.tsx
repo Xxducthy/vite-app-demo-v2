@@ -13,7 +13,7 @@ import { enrichWordWithAI, batchEnrichWords } from './services/geminiService';
 import { Book, List, Plus, GraduationCap, AlertCircle, Search, Download, Settings } from 'lucide-react';
 
 const STORAGE_KEY = 'kaoyan_vocab_progress_v1';
-const APP_VERSION = 'v6.3';
+const APP_VERSION = 'v6.4';
 
 const App: React.FC = () => {
   // --- State ---
@@ -56,17 +56,24 @@ const App: React.FC = () => {
     .filter(w => w.nextReview <= now)
     .sort((a, b) => {
         // Priority 1: Interval 0 (Forgotten/New) words first
-        // This ensures the most difficult words appear immediately in the next session setup
         if (a.interval === 0 && b.interval !== 0) return -1;
         if (a.interval !== 0 && b.interval === 0) return 1;
-        // Priority 2: Overdue amount (Ascending order of nextReview, i.e., most overdue first)
+        // Priority 2: Overdue amount
         return a.nextReview - b.nextReview;
     });
 
-  // Current Word Logic for the Flashcard View
+  // Current Word Logic
   const currentWordId = isSessionActive && sessionQueue.length > 0 ? sessionQueue[0] : null;
   const currentWord = currentWordId ? words.find(w => w.id === currentWordId) : null;
   
+  // Safety Check for Spinner Bug: If session is active but queue is empty and NOT finished, something is wrong.
+  useEffect(() => {
+    if (isSessionActive && sessionQueue.length === 0 && !hasFinishedSession) {
+        // This handles the "Spinning" bug. If logic falls through, auto-finish.
+        setHasFinishedSession(true);
+    }
+  }, [isSessionActive, sessionQueue.length, hasFinishedSession]);
+
   // --- Effects ---
   useEffect(() => {
      const interval = setInterval(() => setNow(Date.now()), 30000);
@@ -107,9 +114,23 @@ const App: React.FC = () => {
     }
   };
 
-  const handleStartSession = (count: number) => {
-      // Pick the top 'count' words from the priority-sorted global queue
-      const queueIds = globalStudyQueue.slice(0, count).map(w => w.id);
+  const handleStartSession = (count: number, isCram: boolean = false) => {
+      let queueIds: string[] = [];
+
+      if (isCram) {
+          // Cram Mode: Shuffle ALL words and pick 'count'
+          const shuffled = [...words].sort(() => 0.5 - Math.random());
+          queueIds = shuffled.slice(0, count).map(w => w.id);
+      } else {
+          // Normal Mode: Pick from due queue
+          queueIds = globalStudyQueue.slice(0, count).map(w => w.id);
+      }
+
+      if (queueIds.length === 0) {
+          setError("没有可背诵的单词");
+          return;
+      }
+
       setSessionQueue(queueIds);
       setSessionStats({}); // Reset session stats
       setIsSessionActive(true);
@@ -124,7 +145,7 @@ const App: React.FC = () => {
       if (mode === 'study') setMode('list');
   };
 
-  // --- ADAPTIVE SRS & LOOP LOGIC (CORE FUNCTION) ---
+  // --- ADAPTIVE SRS & LOOP LOGIC ---
   const handleStatusChange = useCallback((id: string, actionStatus: WordStatus) => {
     // 1. Update Session Stats (Increment attempt count for this word)
     setSessionStats(prev => ({
@@ -141,30 +162,22 @@ const App: React.FC = () => {
       // --- Adaptive Algorithm ---
       if (actionStatus === WordStatus.New) {
           // "Forgot": RESET
-          // If user forgot, reset interval to 0 (Immediate Review) and make it harder (E=1.3)
           easeFactor = 1.3;
           interval = 0;
           repetitions = 0;
       } 
       else if (actionStatus === WordStatus.Learning) {
           // "Blurry": HARDER
-          // Decrease Ease Factor (min 1.3). 
           easeFactor = Math.max(1.3, easeFactor - 0.1);
-          repetitions = 0; // Reset consecutive reps as it wasn't a perfect recall
-          
-          // Interval adjustment:
-          // Even though we loop it in the session, we set the *future* interval.
-          // Since it's blurry, we want to see it relatively soon after this session.
+          repetitions = 0; 
           interval = interval === 0 ? 0 : interval * 0.5; 
       } 
       else if (actionStatus === WordStatus.Mastered) {
           // "Remember": EASIER
-          // Increase Ease Factor
           easeFactor = easeFactor + 0.1;
           repetitions += 1;
           
-          // Calculate new interval (Standard SM-2 style logic)
-          if (interval === 0) interval = 1; // First success -> 1 day
+          if (interval === 0) interval = 1; 
           else if (interval < 1) interval = 1; 
           else interval = Math.round(interval * easeFactor);
       }
@@ -172,14 +185,11 @@ const App: React.FC = () => {
       // --- Next Review Calculation ---
       let nextReview = currentTime;
       if (interval === 0) {
-          // If interval is 0, it is due immediately. 
-          // (Though Session Loop handles immediate reappearance)
           nextReview = currentTime; 
       } else {
           nextReview = currentTime + (interval * 24 * 60 * 60 * 1000);
       }
 
-      // Update Visual Status Label based on mastery level
       let newStatus = WordStatus.New;
       if (repetitions > 0) newStatus = WordStatus.Learning;
       if (interval >= 21) newStatus = WordStatus.Mastered;
@@ -218,7 +228,6 @@ const App: React.FC = () => {
   }, []);
 
   const handleNext = useCallback(() => { 
-      // Handled in handleStatusChange via setSessionQueue
       setNow(Date.now()); 
   }, []);
 
@@ -474,13 +483,15 @@ const App: React.FC = () => {
           {mode === 'study' && (
              !isSessionActive && !hasFinishedSession ? (
                  <StudySession 
-                    totalDue={globalStudyQueue.length} 
+                    totalDue={globalStudyQueue.length}
+                    totalWords={words.length}
                     onStartSession={handleStartSession}
                     onExit={() => setMode('list')}
                  />
              ) : hasFinishedSession ? (
                  <StudySession 
                     totalDue={globalStudyQueue.length}
+                    totalWords={words.length}
                     onStartSession={handleStartSession}
                     onExit={() => { setMode('list'); setHasFinishedSession(false); }}
                     onContinue={() => { setHasFinishedSession(false); /* Just resets UI to setup */ }}
