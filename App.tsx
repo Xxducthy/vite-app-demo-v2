@@ -66,7 +66,7 @@ const App: React.FC = () => {
   // --- Effects ---
   useEffect(() => {
      const interval = setInterval(() => setNow(Date.now()), 30000);
-     console.log("App Version: v5.5 (Adaptive SRS Loop)"); 
+     console.log("App Version: v5.6 (Adaptive Loop Fixed)"); 
      
      return () => clearInterval(interval);
   }, []);
@@ -138,31 +138,35 @@ const App: React.FC = () => {
           // "Blurry": Harder, decrease E
           easeFactor = Math.max(1.3, easeFactor - 0.1);
           repetitions = 0; // Treat as re-learning
-          // Interval grows slower or resets to minimal
-          interval = interval === 0 ? 0.5 : interval * 1.2; 
+          
+          // Calculate interval: If it was 0, set to very short (e.g. 0.5 days), else grow slowly
+          // But since this is "Blurry", we effectively want to see it soon.
+          // For the sake of the algorithm, we calculate a future date, 
+          // BUT the Loop Logic below will force it to reappear in THIS session anyway.
+          interval = interval === 0 ? 0.2 : interval * 0.8; 
       } 
       else if (actionStatus === WordStatus.Mastered) {
           // "Master": Easier, increase E
           easeFactor = easeFactor + 0.1;
           repetitions += 1;
           
-          if (interval === 0) interval = 1;
-          else if (interval === 0.5) interval = 1;
+          // Calculate new interval
+          if (interval === 0) interval = 1; // First success -> 1 day
+          else if (interval < 1) interval = 1; // From fractional -> 1 day
           else interval = Math.round(interval * easeFactor);
       }
 
       // --- Next Review Calculation ---
       let nextReview = currentTime;
       if (interval === 0) {
-          nextReview = currentTime; // Immediate review (for queue sorting later)
-      } else if (interval < 1) {
-          // Fractional days (e.g. 0.5 = 12 hours)
-          nextReview = currentTime + (interval * 24 * 60 * 60 * 1000);
+          // Forgot: Due immediately
+          nextReview = currentTime; 
       } else {
-          // Full days
+          // Future date
           nextReview = currentTime + (interval * 24 * 60 * 60 * 1000);
       }
 
+      // Update Visual Status Label
       let newStatus = WordStatus.New;
       if (repetitions > 0) newStatus = WordStatus.Learning;
       if (interval >= 21) newStatus = WordStatus.Mastered;
@@ -180,18 +184,18 @@ const App: React.FC = () => {
     
     // --- Session Queue Loop Logic ---
     setSessionQueue(prev => {
-        const currentId = prev[0];
+        // Remove current word from front
         const rest = prev.slice(1);
         
         if (actionStatus === WordStatus.Mastered) {
-            // Success: Remove from session queue
+            // Success: Word is done for this session
             if (rest.length === 0) {
                 setHasFinishedSession(true);
             }
             return rest;
         } else {
-            // Failure/Blurry: Move to back of queue (Loop until mastered)
-            return [...rest, currentId];
+            // Failure/Blurry: Push current ID to back of queue (Loop)
+            return [...rest, id];
         }
     });
 
@@ -199,7 +203,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleNext = useCallback(() => { 
-      // Handled in handleStatusChange
+      // Handled in handleStatusChange via setSessionQueue
       setNow(Date.now()); 
   }, []);
 
@@ -372,13 +376,13 @@ const App: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (mode !== 'study' || !currentWord) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if (e.key === '1') { handleStatusChange(currentWord.id, WordStatus.New); handleNext(); } 
-      else if (e.key === '2') { handleStatusChange(currentWord.id, WordStatus.Learning); handleNext(); } 
-      else if (e.key === '3') { handleStatusChange(currentWord.id, WordStatus.Mastered); handleNext(); }
+      if (e.key === '1') { handleStatusChange(currentWord.id, WordStatus.New); } 
+      else if (e.key === '2') { handleStatusChange(currentWord.id, WordStatus.Learning); } 
+      else if (e.key === '3') { handleStatusChange(currentWord.id, WordStatus.Mastered); }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [mode, currentWord, handleStatusChange, handleNext]);
+  }, [mode, currentWord, handleStatusChange]);
 
   return (
     <div className="flex flex-col h-full bg-slate-50 text-slate-900 relative selection:bg-indigo-100 selection:text-indigo-700 font-sans">
