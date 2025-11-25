@@ -4,12 +4,12 @@ import { Play, CheckCircle2, Coffee, ArrowRight, Layers, Shuffle, RotateCcw, Dum
 
 interface StudySessionProps {
   totalDue: number;
-  totalWords: number; // New prop to distinguish "Empty Library" vs "Done for day"
-  onStartSession: (count: number, isCram?: boolean) => void; // Updated signature
+  totalWords: number; 
+  onStartSession: (count: number, isCram?: boolean) => void; 
   onExit: () => void;
-  // For Summary View
   isFinished?: boolean;
   onContinue?: () => void;
+  onReviewAgain?: () => void;
 }
 
 export const StudySession: React.FC<StudySessionProps> = ({ 
@@ -18,7 +18,8 @@ export const StudySession: React.FC<StudySessionProps> = ({
   onStartSession, 
   onExit,
   isFinished,
-  onContinue 
+  onContinue,
+  onReviewAgain
 }) => {
   
   // --- SESSION COMPLETE VIEW ---
@@ -29,33 +30,39 @@ export const StudySession: React.FC<StudySessionProps> = ({
            <CheckCircle2 size={48} className="text-emerald-500" />
         </div>
         
-        <h2 className="text-3xl font-black text-slate-800 mb-2">本组完成!</h2>
+        <h2 className="text-3xl font-black text-slate-800 mb-2">本组闯关成功!</h2>
         <p className="text-slate-500 mb-10 text-center max-w-xs">
-           休息一下，或者继续学习。
+           您已掌握这组单词。接下来做什么？
         </p>
 
-        <div className="flex flex-col gap-4 w-full max-w-xs">
-           {totalDue > 0 ? (
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+           {/* Priority 1: Continue to Next Batch if available */}
+           {totalDue > 0 && onContinue && (
                <button 
                   onClick={onContinue}
                   className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-lg shadow-xl shadow-indigo-200 flex items-center justify-center gap-2 transition-transform active:scale-95"
                 >
                   继续下一组 <ArrowRight size={20} />
                </button>
-           ) : (
+           )}
+           
+           {/* Priority 2: Review the same batch again */}
+           {onReviewAgain && (
                <button 
-                  onClick={() => onStartSession(20, true)} // Start Cram Session
-                  className="w-full py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl font-bold text-lg shadow-xl shadow-amber-200 flex items-center justify-center gap-2 transition-transform active:scale-95"
+                  onClick={onReviewAgain}
+                  className={`w-full py-3.5 rounded-2xl font-bold text-base flex items-center justify-center gap-2 transition-all active:scale-95 ${totalDue > 0 ? 'bg-white border-2 border-indigo-100 text-indigo-600 hover:bg-indigo-50' : 'bg-amber-500 text-white shadow-lg shadow-amber-200 hover:bg-amber-600'}`}
                 >
-                  <RotateCcw size={20} /> 再来一组 (巩固)
+                  <RotateCcw size={18} /> {totalDue > 0 ? "再背一次本组 (巩固)" : "再背一次本组"}
                </button>
            )}
            
+           <div className="h-4"></div>
+
            <button 
               onClick={onExit}
-              className="w-full py-4 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors"
+              className="w-full py-3 bg-transparent hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-xl font-medium text-sm flex items-center justify-center gap-2 transition-colors"
            >
-              <Coffee size={20} /> 结束学习
+              <Coffee size={16} /> 休息一会儿
            </button>
         </div>
       </div>
@@ -83,7 +90,6 @@ export const StudySession: React.FC<StudySessionProps> = ({
             }
          </p>
 
-         {/* Normal Review Mode */}
          {!isAllCaughtUp && (
              <div className="space-y-3">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">选择本组学习数量</p>
@@ -109,7 +115,6 @@ export const StudySession: React.FC<StudySessionProps> = ({
              </div>
          )}
 
-         {/* Cram / Consolidation Mode (Shown when caught up OR explicitly wanted) */}
          {isAllCaughtUp && totalWords > 0 && (
              <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2">
                 <div className="flex items-center gap-2 justify-center text-amber-500 mb-2 opacity-80">
