@@ -51,26 +51,22 @@ const App: React.FC = () => {
   // Global Queue (All words due)
   const globalStudyQueue = words
     .filter(w => w.nextReview <= now)
-    .sort((a, b) => a.nextReview - b.nextReview);
+    .sort((a, b) => {
+        // Priority 1: Interval 0 (Forgotten/New) words first
+        if (a.interval === 0 && b.interval !== 0) return -1;
+        if (a.interval !== 0 && b.interval === 0) return 1;
+        // Priority 2: Overdue amount
+        return a.nextReview - b.nextReview;
+    });
 
   // Current Word Logic
-  // If session active, pick from sessionQueue. If not, don't show cards.
   const currentWordId = isSessionActive && sessionQueue.length > 0 ? sessionQueue[0] : null;
   const currentWord = currentWordId ? words.find(w => w.id === currentWordId) : null;
   
   // --- Effects ---
   useEffect(() => {
      const interval = setInterval(() => setNow(Date.now()), 30000);
-     console.log("App Version: v5.4 (Session Mode)"); // Version Log
-     
-     // Force Refresh Check
-     const version = 'v5.4';
-     if (localStorage.getItem('app_version') !== version) {
-         localStorage.setItem('app_version', version);
-         if (window.confirm("应用已更新 (v5.4)，增加分组学习功能，请点击确定以刷新页面。")) {
-             window.location.reload();
-         }
-     }
+     console.log("App Version: v5.5 (Adaptive SRS Loop)"); 
      
      return () => clearInterval(interval);
   }, []);
@@ -109,6 +105,7 @@ const App: React.FC = () => {
   };
 
   const handleStartSession = (count: number) => {
+      // Logic: Prioritize 0-interval words, then normal due words
       const queueIds = globalStudyQueue.slice(0, count).map(w => w.id);
       setSessionQueue(queueIds);
       setIsSessionActive(true);
@@ -122,58 +119,87 @@ const App: React.FC = () => {
       if (mode === 'study') setMode('list');
   };
 
+  // --- ADAPTIVE SRS & LOOP LOGIC ---
   const handleStatusChange = useCallback((id: string, actionStatus: WordStatus) => {
-    // 1. Update Word Data (SRS)
     setWords(prev => prev.map(w => {
       if (w.id !== id) return w;
+
       const currentTime = Date.now();
       let { interval, easeFactor, repetitions } = w;
-      let quality = 0;
-      if (actionStatus === WordStatus.New) quality = 0;
-      else if (actionStatus === WordStatus.Learning) quality = 3;
-      else if (actionStatus === WordStatus.Mastered) quality = 5;
-
-      if (quality < 3) {
-        repetitions = 0;
-        interval = 0;
-      } else {
-        if (repetitions === 0) interval = 1;
-        else if (repetitions === 1) interval = 6;
-        else interval = Math.round(interval * easeFactor);
-        repetitions++;
+      
+      // --- Adaptive Logic ---
+      if (actionStatus === WordStatus.New) {
+          // "Forgot": Reset
+          easeFactor = 1.3;
+          interval = 0;
+          repetitions = 0;
+      } 
+      else if (actionStatus === WordStatus.Learning) {
+          // "Blurry": Harder, decrease E
+          easeFactor = Math.max(1.3, easeFactor - 0.1);
+          repetitions = 0; // Treat as re-learning
+          // Interval grows slower or resets to minimal
+          interval = interval === 0 ? 0.5 : interval * 1.2; 
+      } 
+      else if (actionStatus === WordStatus.Mastered) {
+          // "Master": Easier, increase E
+          easeFactor = easeFactor + 0.1;
+          repetitions += 1;
+          
+          if (interval === 0) interval = 1;
+          else if (interval === 0.5) interval = 1;
+          else interval = Math.round(interval * easeFactor);
       }
-      easeFactor = easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
-      if (easeFactor < 1.3) easeFactor = 1.3;
 
+      // --- Next Review Calculation ---
       let nextReview = currentTime;
-      if (quality === 0) nextReview = currentTime; 
-      else if (quality === 3 && repetitions <= 1) nextReview = currentTime + 10 * 60 * 1000;
-      else nextReview = currentTime + (interval * 24 * 60 * 60 * 1000);
+      if (interval === 0) {
+          nextReview = currentTime; // Immediate review (for queue sorting later)
+      } else if (interval < 1) {
+          // Fractional days (e.g. 0.5 = 12 hours)
+          nextReview = currentTime + (interval * 24 * 60 * 60 * 1000);
+      } else {
+          // Full days
+          nextReview = currentTime + (interval * 24 * 60 * 60 * 1000);
+      }
 
       let newStatus = WordStatus.New;
       if (repetitions > 0) newStatus = WordStatus.Learning;
       if (interval >= 21) newStatus = WordStatus.Mastered;
 
       return {
-        ...w, status: newStatus, interval, easeFactor, repetitions, nextReview, lastReviewed: currentTime
+        ...w, 
+        status: newStatus, 
+        interval, 
+        easeFactor, 
+        repetitions, 
+        nextReview, 
+        lastReviewed: currentTime
       };
     }));
     
-    // 2. Remove from Current Session Queue
+    // --- Session Queue Loop Logic ---
     setSessionQueue(prev => {
-        const nextQueue = prev.filter(qId => qId !== id);
-        if (nextQueue.length === 0) {
-            setHasFinishedSession(true);
+        const currentId = prev[0];
+        const rest = prev.slice(1);
+        
+        if (actionStatus === WordStatus.Mastered) {
+            // Success: Remove from session queue
+            if (rest.length === 0) {
+                setHasFinishedSession(true);
+            }
+            return rest;
+        } else {
+            // Failure/Blurry: Move to back of queue (Loop until mastered)
+            return [...rest, currentId];
         }
-        return nextQueue;
     });
 
     setNow(Date.now());
   }, []);
 
   const handleNext = useCallback(() => { 
-      // Logic handled in handleStatusChange mostly (popping queue). 
-      // This is primarily for visual refresh if needed.
+      // Handled in handleStatusChange
       setNow(Date.now()); 
   }, []);
 

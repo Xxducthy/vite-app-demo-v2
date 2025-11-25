@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -64,25 +65,21 @@
     <script type="module" src="/index.tsx"></script>
 
     <script>
-      // NUCLEAR OPTION: Force update Service Worker
+      // SAFE SERVICE WORKER REGISTRATION
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          // 1. Unregister all existing SWs first (Clean Slate)
-          navigator.serviceWorker.getRegistrations().then(function(registrations) {
-            for(let registration of registrations) {
-               // Unregister to force reload next time
-               registration.unregister(); 
-            }
-          });
-
-          // 2. Register new SW
-          navigator.serviceWorker.register('/sw.js').then(reg => {
-            console.log('SW registered');
-            // Force check for updates
-            reg.update();
-          }).catch(err => {
-            console.log('SW registration failed: ', err);
-          });
+          try {
+              // 1. Attempt to register
+              navigator.serviceWorker.register('/sw.js').then(reg => {
+                // Check for updates
+                reg.update().catch(() => {});
+              }).catch(err => {
+                console.log('SW registration failed (harmless in preview):', err);
+              });
+          } catch (e) {
+              // Suppress errors in iframe/preview environments where SW might be restricted
+              console.log('SW disabled in this environment');
+          }
         });
       }
     </script>
