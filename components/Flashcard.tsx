@@ -8,7 +8,7 @@ interface FlashcardProps {
   onStatusChange: (id: string, status: WordStatus) => void;
   onNext: () => void;
   sessionAttempts: number; // How many times seen in this session
-  repetitionCount: number; // How many consecutive correct (Streak)
+  learningStreak?: number; // How many consecutive correct (Streak) IN SESSION. Undefined if Direct Pass.
 }
 
 export const Flashcard: React.FC<FlashcardProps> = ({ 
@@ -16,7 +16,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({
   onStatusChange, 
   onNext,
   sessionAttempts,
-  repetitionCount
+  learningStreak
 }) => {
   const [isFlipped, setIsFlipped] = useState(false);
   
@@ -99,23 +99,27 @@ export const Flashcard: React.FC<FlashcardProps> = ({
   const StatusBadge = () => (
     <div className="absolute top-6 left-6 flex items-center gap-3 z-20">
         {/* Session Attempts Counter (How many times recycled) */}
-        <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50/80 backdrop-blur border border-slate-100 rounded-lg text-slate-400" title="本轮循环次数">
-            <RefreshCw size={10} className={sessionAttempts > 0 ? "text-indigo-500" : ""} />
-            <span className="text-[10px] font-bold font-mono">{sessionAttempts + 1}</span>
-        </div>
-
-        {/* Mastery Streak Dots */}
-        <div className="flex items-center gap-1 px-2 py-1 bg-slate-50/80 backdrop-blur border border-slate-100 rounded-lg" title="熟练度">
-            <Trophy size={10} className={repetitionCount > 0 ? "text-amber-500" : "text-slate-300"} />
-            <div className="flex gap-0.5 ml-1">
-                {[...Array(3)].map((_, i) => (
-                    <div 
-                        key={i} 
-                        className={`w-1.5 h-1.5 rounded-full ${i < repetitionCount ? 'bg-amber-400' : 'bg-slate-200'}`}
-                    ></div>
-                ))}
+        {sessionAttempts > 0 && (
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-50/80 backdrop-blur border border-slate-100 rounded-lg text-slate-400" title="本轮循环次数">
+                <RefreshCw size={10} className="text-indigo-500" />
+                <span className="text-[10px] font-bold font-mono">{sessionAttempts + 1}</span>
             </div>
-        </div>
+        )}
+
+        {/* Mastery Streak Dots (Only show if in Penalty Loop) */}
+        {learningStreak !== undefined && (
+            <div className="flex items-center gap-1 px-2 py-1 bg-slate-50/80 backdrop-blur border border-slate-100 rounded-lg" title="需连续正确3次">
+                <Trophy size={10} className={learningStreak > 0 ? "text-amber-500" : "text-slate-300"} />
+                <div className="flex gap-0.5 ml-1">
+                    {[...Array(3)].map((_, i) => (
+                        <div 
+                            key={i} 
+                            className={`w-1.5 h-1.5 rounded-full transition-colors duration-300 ${i < learningStreak ? 'bg-amber-400' : 'bg-slate-200'}`}
+                        ></div>
+                    ))}
+                </div>
+            </div>
+        )}
     </div>
   );
 

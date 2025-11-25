@@ -13,7 +13,7 @@ import { enrichWordWithAI, batchEnrichWords } from './services/geminiService';
 import { Book, List, Plus, GraduationCap, AlertCircle, Search, Download, Settings } from 'lucide-react';
 
 const STORAGE_KEY = 'kaoyan_vocab_progress_v1';
-const APP_VERSION = 'v6.6';
+const APP_VERSION = 'v6.7 (Smart Loop)';
 
 const App: React.FC = () => {
   // --- State ---
@@ -49,6 +49,12 @@ const App: React.FC = () => {
   const [sessionInitialCount, setSessionInitialCount] = useState(0); // For Progress Bar
   const [lastSessionIds, setLastSessionIds] = useState<string[]>([]); // For "Review Again"
   const [hasFinishedSession, setHasFinishedSession] = useState(false);
+  
+  // Track consecutive correct answers WITHIN the current session for penalty words
+  // Key: Word ID, Value: Streak Count (0, 1, 2...). If undefined, it means word hasn't entered penalty loop yet.
+  const [sessionLearningStreaks, setSessionLearningStreaks] = useState<Record<string, number>>({});
+  
+  // Track total attempts for UI display only
   const [sessionStats, setSessionStats] = useState<Record<string, number>>({});
 
   // --- Derived State ---
@@ -120,7 +126,6 @@ const App: React.FC = () => {
       if (Array.isArray(countOrIds)) {
           // Restore specific IDs (e.g. "Review Again")
           queueIds = [...countOrIds];
-          // For cramming specific IDs, we might want to shuffle them
           if (isCram) {
               queueIds.sort(() => 0.5 - Math.random());
           }
@@ -144,8 +149,9 @@ const App: React.FC = () => {
 
       setSessionQueue(queueIds);
       setSessionInitialCount(queueIds.length);
-      setLastSessionIds(queueIds); // Save for "Review Again"
+      setLastSessionIds(queueIds); 
       setSessionStats({}); 
+      setSessionLearningStreaks({}); // Reset streaks for new session
       setIsSessionActive(true);
       setHasFinishedSession(false);
   };
@@ -154,14 +160,17 @@ const App: React.FC = () => {
       setIsSessionActive(false);
       setSessionQueue([]);
       setSessionStats({});
+      setSessionLearningStreaks({});
       setHasFinishedSession(false);
       if (mode === 'study') setMode('list');
   };
 
-  // --- ADAPTIVE SRS & LOOP LOGIC ---
+  // --- ADAPTIVE SRS & LOOP LOGIC (REFACTORED) ---
   const handleStatusChange = useCallback((id: string, actionStatus: WordStatus) => {
+    // 1. Update Session Attempts (Total times seen this session)
     setSessionStats(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
 
+    // 2. Calculate New Stats (Standard SM-2 / Ebbinghaus Logic)
     setWords(prev => prev.map(w => {
       if (w.id !== id) return w;
       const currentTime = Date.now();
@@ -180,6 +189,7 @@ const App: React.FC = () => {
           else interval = Math.round(interval * easeFactor);
       }
 
+      // Schedule next review
       let nextReview = currentTime;
       if (interval === 0) nextReview = currentTime; 
       else nextReview = currentTime + (interval * 24 * 60 * 60 * 1000);
@@ -191,17 +201,47 @@ const App: React.FC = () => {
       return { ...w, status: newStatus, interval, easeFactor, repetitions, nextReview, lastReviewed: currentTime };
     }));
     
-    setSessionQueue(prev => {
-        const rest = prev.slice(1);
-        if (actionStatus === WordStatus.Mastered) {
-            if (rest.length === 0) setHasFinishedSession(true);
-            return rest;
+    // 3. Queue Management (The Loop Logic)
+    const currentStreak = sessionLearningStreaks[id];
+    // "In Penalty Loop" means user has previously marked it as Forgot/Blurry in this session
+    const isInPenaltyLoop = currentStreak !== undefined; 
+
+    if (actionStatus === WordStatus.Mastered) {
+        if (isInPenaltyLoop) {
+            // Logic: Must hit Master 3 times consecutively to finish
+            const newStreak = currentStreak + 1;
+            setSessionLearningStreaks(prev => ({ ...prev, [id]: newStreak }));
+            
+            if (newStreak >= 3) {
+                // Graduation: Remove from queue
+                setSessionQueue(prev => {
+                    const rest = prev.slice(1);
+                    if (rest.length === 0) setHasFinishedSession(true);
+                    return rest;
+                });
+            } else {
+                // Not yet graduated: Move to back of queue
+                setSessionQueue(prev => [...prev.slice(1), id]);
+            }
         } else {
-            return [...rest, id];
+            // Direct Pass: First time seeing it and mastered immediately
+            setSessionQueue(prev => {
+                const rest = prev.slice(1);
+                if (rest.length === 0) setHasFinishedSession(true);
+                return rest;
+            });
         }
-    });
+    } else {
+        // Forgot or Blurry
+        // Enter (or stay in) Penalty Loop -> Reset Streak to 0
+        setSessionLearningStreaks(prev => ({ ...prev, [id]: 0 }));
+        
+        // Move to back of queue
+        setSessionQueue(prev => [...prev.slice(1), id]);
+    }
+    
     setNow(Date.now());
-  }, []);
+  }, [sessionLearningStreaks]);
 
   const handleNext = useCallback(() => { setNow(Date.now()); }, []);
 
@@ -227,9 +267,6 @@ const App: React.FC = () => {
   };
 
   const handleImport = async (terms: string[]) => {
-    // ... (Import logic remains the same)
-    // To save space in this response, omitting the bulk of handleImport logic as it wasn't changed.
-    // Assuming it exists as before.
     const currentTime = Date.now();
     const uniqueTerms = terms.filter(t => !words.some(w => w.term.toLowerCase() === t.toLowerCase()));
     if (uniqueTerms.length === 0) return;
@@ -251,7 +288,6 @@ const App: React.FC = () => {
     setSearchTerm('');
     setShowSearchDropdown(false);
     
-    // Trigger background enrichment (Simplified for brevity)
     const total = newWords.length;
     setEnrichProgress({ current: 0, total });
     batchEnrichWords(newWords.map(w => w.term)).then(enrichedResults => {
@@ -364,7 +400,8 @@ const App: React.FC = () => {
                       key={currentWord.id} 
                       word={currentWord} 
                       sessionAttempts={sessionStats[currentWord.id] || 0}
-                      repetitionCount={currentWord.repetitions}
+                      // Pass the within-session streak for penalty words. Undefined if Direct Pass capable.
+                      learningStreak={sessionLearningStreaks[currentWord.id]}
                       onStatusChange={handleStatusChange} 
                       onNext={handleNext} 
                    />
