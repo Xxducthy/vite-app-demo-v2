@@ -13,7 +13,7 @@ import { enrichWordWithAI, batchEnrichWords } from './services/geminiService';
 import { Book, List, Plus, GraduationCap, AlertCircle, Search, Download, Settings } from 'lucide-react';
 
 const STORAGE_KEY = 'kaoyan_vocab_progress_v1';
-const APP_VERSION = 'v6.1';
+const APP_VERSION = 'v6.2';
 
 const App: React.FC = () => {
   // --- State ---
@@ -513,6 +513,38 @@ const App: React.FC = () => {
           )}
         </div>
       </main>
+
+      {/* Bottom Navigation Dock - Hide on Dictionary Detail */}
+      {mode !== 'dictionary' && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5 p-1.5 bg-white/80 backdrop-blur-xl border border-white/50 shadow-2xl shadow-indigo-500/10 rounded-2xl ring-1 ring-white/50 animate-in slide-in-from-bottom-6">
+            <button
+                onClick={() => setMode('study')}
+                className={`flex items-center gap-2 px-4 py-3 rounded-xl transition-all font-bold text-sm ${mode === 'study' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-100'}`}
+            >
+                <Book size={18} strokeWidth={2.5} />
+                <span className={mode === 'study' ? 'block' : 'hidden'}>Study</span>
+            </button>
+
+            <div className="w-px h-6 bg-slate-200 mx-1"></div>
+
+            <button
+                onClick={() => setMode('import')}
+                className={`p-3 rounded-xl transition-all ${mode === 'import' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 rotate-90' : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
+            >
+                <Plus size={22} strokeWidth={3} />
+            </button>
+
+            <div className="w-px h-6 bg-slate-200 mx-1"></div>
+
+            <button
+                onClick={() => setMode('list')}
+                className={`flex items-center gap-2 px-4 py-3 rounded-xl transition-all font-bold text-sm ${mode === 'list' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-100'}`}
+            >
+                <List size={18} strokeWidth={2.5} />
+                <span className={mode === 'list' ? 'block' : 'hidden'}>List</span>
+            </button>
+        </div>
+      )}
     </div>
   );
 };
