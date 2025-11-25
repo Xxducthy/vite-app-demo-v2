@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Word, WordStatus, ViewMode, DictionaryEntry } from './types';
 import { INITIAL_WORDS, AUTOCOMPLETE_DICT } from './constants';
@@ -7,6 +8,7 @@ import { ImportModal } from './components/ImportModal';
 import { DictionaryDetail } from './components/DictionaryDetail';
 import { InstallGuide } from './components/InstallGuide';
 import { SettingsModal } from './components/SettingsModal'; 
+import { StudySession } from './components/StudySession';
 import { enrichWordWithAI, batchEnrichWords } from './services/geminiService';
 import { Book, List, Plus, GraduationCap, AlertCircle, Search, Download, Settings } from 'lucide-react';
 
@@ -40,24 +42,32 @@ const App: React.FC = () => {
   const [showInstallGuide, setShowInstallGuide] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
+  // --- Session State ---
+  const [isSessionActive, setIsSessionActive] = useState(false);
+  const [sessionQueue, setSessionQueue] = useState<string[]>([]); // Stores IDs
+  const [hasFinishedSession, setHasFinishedSession] = useState(false);
+
   // --- Derived State ---
-  const studyQueue = words
+  // Global Queue (All words due)
+  const globalStudyQueue = words
     .filter(w => w.nextReview <= now)
     .sort((a, b) => a.nextReview - b.nextReview);
 
-  const currentWord = studyQueue.length > 0 ? studyQueue[0] : null;
+  // Current Word Logic
+  // If session active, pick from sessionQueue. If not, don't show cards.
+  const currentWordId = isSessionActive && sessionQueue.length > 0 ? sessionQueue[0] : null;
+  const currentWord = currentWordId ? words.find(w => w.id === currentWordId) : null;
   
   // --- Effects ---
   useEffect(() => {
      const interval = setInterval(() => setNow(Date.now()), 30000);
-     console.log("App Version: v5.3 (Force Update Active)"); // Version Log
+     console.log("App Version: v5.4 (Session Mode)"); // Version Log
      
      // Force Refresh Check
-     const version = 'v5.3';
+     const version = 'v5.4';
      if (localStorage.getItem('app_version') !== version) {
          localStorage.setItem('app_version', version);
-         // Force reload to apply new SW
-         if (window.confirm("应用已更新 (v5.3)，请点击确定以刷新页面。")) {
+         if (window.confirm("应用已更新 (v5.4)，增加分组学习功能，请点击确定以刷新页面。")) {
              window.location.reload();
          }
      }
@@ -98,7 +108,22 @@ const App: React.FC = () => {
     }
   };
 
+  const handleStartSession = (count: number) => {
+      const queueIds = globalStudyQueue.slice(0, count).map(w => w.id);
+      setSessionQueue(queueIds);
+      setIsSessionActive(true);
+      setHasFinishedSession(false);
+  };
+
+  const handleExitSession = () => {
+      setIsSessionActive(false);
+      setSessionQueue([]);
+      setHasFinishedSession(false);
+      if (mode === 'study') setMode('list');
+  };
+
   const handleStatusChange = useCallback((id: string, actionStatus: WordStatus) => {
+    // 1. Update Word Data (SRS)
     setWords(prev => prev.map(w => {
       if (w.id !== id) return w;
       const currentTime = Date.now();
@@ -133,10 +158,25 @@ const App: React.FC = () => {
         ...w, status: newStatus, interval, easeFactor, repetitions, nextReview, lastReviewed: currentTime
       };
     }));
+    
+    // 2. Remove from Current Session Queue
+    setSessionQueue(prev => {
+        const nextQueue = prev.filter(qId => qId !== id);
+        if (nextQueue.length === 0) {
+            setHasFinishedSession(true);
+        }
+        return nextQueue;
+    });
+
     setNow(Date.now());
   }, []);
 
-  const handleNext = useCallback(() => { setNow(Date.now()); }, []);
+  const handleNext = useCallback(() => { 
+      // Logic handled in handleStatusChange mostly (popping queue). 
+      // This is primarily for visual refresh if needed.
+      setNow(Date.now()); 
+  }, []);
+
   const handleDelete = (id: string) => { setWords(prev => prev.filter(w => w.id !== id)); };
 
   const handleEnrichWord = async (wordToEnrich: Word) => {
@@ -272,16 +312,15 @@ const App: React.FC = () => {
   };
 
   // --- SYNC & DATA MANAGEMENT HANDLERS ---
-
-  // Mode 1: Restore (Overwrite)
   const handleRestoreData = (newWords: Word[]) => {
       setWords(newWords);
       alert(`同步完成！共 ${newWords.length} 个单词。`);
       setShowSettings(false);
       setMode('list');
+      setSessionQueue([]);
+      setIsSessionActive(false);
   };
 
-  // Mode 2: Merge (Import Local DB)
   const handleMergeData = (importedWords: Word[]) => {
       const currentTerms = new Set(words.map(w => w.term.toLowerCase()));
       const wordsToAdd = importedWords.filter(w => !currentTerms.has(w.term.toLowerCase()));
@@ -292,7 +331,6 @@ const App: React.FC = () => {
       setMode('list');
   };
 
-  // Mode 3: Clear
   const handleClearData = () => {
       setWords(INITIAL_WORDS);
       localStorage.removeItem(STORAGE_KEY);
@@ -300,6 +338,8 @@ const App: React.FC = () => {
       alert("数据已重置。");
       setShowSettings(false);
       setMode('list');
+      setSessionQueue([]);
+      setIsSessionActive(false);
   };
 
   useEffect(() => {
@@ -386,19 +426,35 @@ const App: React.FC = () => {
         )}
 
         <div className="w-full h-full max-w-2xl mx-auto transition-all duration-500">
+          
           {mode === 'study' && (
-            currentWord ? (
-              <div className="w-full h-full flex flex-col items-center justify-center">
-                <Flashcard key={currentWord.id} word={currentWord} onStatusChange={handleStatusChange} onNext={handleNext} />
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full">
-                <div className="text-6xl mb-4 animate-bounce">🎉</div>
-                <h2 className="text-2xl font-bold text-slate-800 mb-2">All Done!</h2>
-                <p className="text-slate-500 mb-6 text-sm">今天没有需要复习的单词了。</p>
-                <button onClick={() => setMode('list')} className="px-6 py-2 bg-slate-900 text-white rounded-full text-sm font-bold shadow-lg hover:scale-105 transition-transform">查看词表</button>
-              </div>
-            )
+             !isSessionActive && !hasFinishedSession ? (
+                 <StudySession 
+                    totalDue={globalStudyQueue.length} 
+                    onStartSession={handleStartSession}
+                    onExit={() => setMode('list')}
+                 />
+             ) : hasFinishedSession ? (
+                 <StudySession 
+                    totalDue={globalStudyQueue.length}
+                    onStartSession={handleStartSession}
+                    onExit={() => { setMode('list'); setHasFinishedSession(false); }}
+                    onContinue={() => { setHasFinishedSession(false); /* Just resets UI to setup */ }}
+                    isFinished={true}
+                 />
+             ) : currentWord ? (
+                <div className="w-full h-full flex flex-col items-center justify-center">
+                   <Flashcard key={currentWord.id} word={currentWord} onStatusChange={handleStatusChange} onNext={handleNext} />
+                   <div className="absolute bottom-8 text-xs text-slate-300 font-medium">
+                       本组剩余: {sessionQueue.length}
+                   </div>
+                </div>
+             ) : (
+                // Fallback / Just finished queue transition
+                <div className="flex items-center justify-center h-full">
+                   <div className="animate-spin text-indigo-200"><Settings size={32} /></div>
+                </div>
+             )
           )}
 
           {mode === 'list' && (
