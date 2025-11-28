@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Word, WordStatus } from '../types';
-import { Trash2, Volume2, BrainCircuit, Clock, Search, Loader2, Sparkles, ArrowRight, Book, ChevronRight } from 'lucide-react';
+import { Trash2, Volume2, BrainCircuit, Clock, Search, Loader2, Sparkles, ArrowRight, Book, ChevronRight, Headphones } from 'lucide-react';
 
 interface WordListProps {
   words: Word[];
@@ -9,12 +9,13 @@ interface WordListProps {
   onEnrich: (word: Word) => void;
   onImport: (terms: string[]) => void;
   onLookup: (term: string) => void;
-  onSelectWord: (word: Word) => void; // New prop
+  onSelectWord: (word: Word) => void;
+  onPlayCommute: (words: Word[]) => void; // New prop for playing
   isEnriching: boolean;
   searchTerm: string;
 }
 
-export const WordList: React.FC<WordListProps> = ({ words, onDelete, onEnrich, onLookup, onSelectWord, isEnriching, searchTerm }) => {
+export const WordList: React.FC<WordListProps> = ({ words, onDelete, onEnrich, onLookup, onSelectWord, onPlayCommute, isEnriching, searchTerm }) => {
   const [statusFilter, setStatusFilter] = useState<WordStatus | 'all'>('all');
 
   const filteredWords = words.filter(w => {
@@ -36,9 +37,7 @@ export const WordList: React.FC<WordListProps> = ({ words, onDelete, onEnrich, o
     return Math.ceil(diff / (24 * 60 * 60 * 1000)) + 'd';
   };
 
-  // Helper to get a display string for definitions
   const getDefinitionDisplay = (word: Word) => {
-    // If no meanings and it's likely a new import (no phonetic either usually implies pending AI)
     if ((!word.meanings || word.meanings.length === 0)) {
         return (
             <span className="flex items-center gap-2 text-indigo-500 text-xs animate-pulse font-medium">
@@ -47,13 +46,11 @@ export const WordList: React.FC<WordListProps> = ({ words, onDelete, onEnrich, o
             </span>
         );
     }
-    
-    // Show first definition with part of speech
     const first = word.meanings[0];
     return (
       <span>
-        <span className="font-mono text-xs font-bold text-indigo-500 mr-1">{first.partOfSpeech}</span>
-        {first.definition}
+        <span className="font-mono text-xs font-bold text-indigo-500 dark:text-indigo-400 mr-1">{first.partOfSpeech}</span>
+        <span className="text-slate-600 dark:text-slate-300">{first.definition}</span>
         {word.meanings.length > 1 && <span className="text-slate-400 text-xs ml-1">+{word.meanings.length - 1}</span>}
       </span>
     );
@@ -65,10 +62,10 @@ export const WordList: React.FC<WordListProps> = ({ words, onDelete, onEnrich, o
   };
 
   return (
-    <div className="flex flex-col h-full bg-white/50">
+    <div className="flex flex-col h-full bg-white/50 dark:bg-slate-900/50">
       
       {/* Toolbar */}
-      <div className="p-4 border-b border-slate-100 bg-white/80 backdrop-blur sticky top-0 z-20">
+      <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur sticky top-0 z-20 transition-colors">
         <div className="flex items-center justify-between gap-4">
            <div className="flex gap-2 overflow-x-auto no-scrollbar">
              {(['all', WordStatus.New, WordStatus.Learning, WordStatus.Mastered] as const).map((s) => (
@@ -77,16 +74,29 @@ export const WordList: React.FC<WordListProps> = ({ words, onDelete, onEnrich, o
                  onClick={() => setStatusFilter(s)}
                  className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${
                    statusFilter === s 
-                     ? 'bg-slate-900 text-white border-slate-900' 
-                     : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                     ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-slate-900 dark:border-white' 
+                     : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                  }`}
                >
                  {s === 'all' ? '全部' : s === WordStatus.New ? '新词' : s === WordStatus.Learning ? '学习中' : '已掌握'}
                </button>
              ))}
            </div>
-           <div className="text-xs text-slate-400 font-medium shrink-0 px-2">
-              {filteredWords.length} 个单词
+           
+           {/* Commute Button (Play Filtered) */}
+           <div className="flex items-center gap-2 shrink-0">
+               {filteredWords.length > 0 && (
+                   <button 
+                      onClick={() => onPlayCommute(filteredWords)}
+                      className="w-8 h-8 flex items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:scale-110 transition-transform"
+                      title="Play Audio"
+                   >
+                       <Headphones size={16} />
+                   </button>
+               )}
+               <div className="text-xs text-slate-400 font-medium px-2">
+                  {filteredWords.length} 
+               </div>
            </div>
         </div>
       </div>
@@ -97,11 +107,10 @@ export const WordList: React.FC<WordListProps> = ({ words, onDelete, onEnrich, o
            <div className="flex flex-col items-center justify-center h-64 text-slate-400">
              <Search size={48} className="opacity-20 mb-4" />
              <p className="mb-4 font-medium">本地词库未找到 "{searchTerm}"</p>
-             
              {searchTerm && (
                  <button 
                     onClick={() => onLookup(searchTerm)}
-                    className="px-6 py-3 bg-indigo-600 text-white rounded-2xl font-bold shadow-xl shadow-indigo-200 hover:bg-indigo-700 hover:scale-[1.02] hover:shadow-2xl transition-all flex items-center gap-2 group animate-in fade-in zoom-in duration-300"
+                    className="px-6 py-3 bg-indigo-600 text-white rounded-2xl font-bold shadow-xl shadow-indigo-200 dark:shadow-none hover:bg-indigo-700 hover:scale-[1.02] hover:shadow-2xl transition-all flex items-center gap-2 group animate-in fade-in zoom-in duration-300"
                  >
                     <Book size={18} className="group-hover:fill-white transition-colors" />
                     查阅字典 "{searchTerm}"
@@ -114,10 +123,8 @@ export const WordList: React.FC<WordListProps> = ({ words, onDelete, onEnrich, o
             <div 
               key={word.id} 
               onClick={() => onSelectWord(word)}
-              className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:shadow-md hover:border-indigo-100 transition-all group relative overflow-hidden cursor-pointer"
+              className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-md hover:border-indigo-100 dark:hover:border-indigo-900 transition-all group relative overflow-hidden cursor-pointer"
             >
-              
-              {/* Status Indicator Line */}
               <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${
                 word.status === WordStatus.Mastered ? 'bg-emerald-400' : 
                 word.status === WordStatus.Learning ? 'bg-amber-400' : 'bg-indigo-400'
@@ -126,38 +133,37 @@ export const WordList: React.FC<WordListProps> = ({ words, onDelete, onEnrich, o
               <div className="flex items-start justify-between gap-4 pl-2">
                 <div className="flex-grow min-w-0">
                   <div className="flex items-baseline gap-2 mb-1">
-                    <h3 className="text-xl font-bold text-slate-800 truncate group-hover:text-indigo-600 transition-colors">{word.term}</h3>
+                    <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{word.term}</h3>
                     {word.phonetic ? (
                         <span className="text-sm font-mono text-slate-400">{word.phonetic}</span>
                     ) : (
-                        <div className="h-4 w-12 bg-slate-100 rounded animate-pulse"></div>
+                        <div className="h-4 w-12 bg-slate-100 dark:bg-slate-700 rounded animate-pulse"></div>
                     )}
                   </div>
-                  <div className="text-sm text-slate-600 line-clamp-1 mb-1 font-medium h-6 flex items-center">
+                  <div className="text-sm text-slate-600 dark:text-slate-300 line-clamp-1 mb-1 font-medium h-6 flex items-center">
                     {getDefinitionDisplay(word)}
                   </div>
                   {word.meanings && word.meanings.length > 0 ? (
                       <p className="text-xs text-slate-400 line-clamp-1 opacity-80 italic">"{getExampleDisplay(word)}"</p>
                   ) : (
-                      <div className="h-3 w-3/4 bg-slate-50 rounded animate-pulse mt-1"></div>
+                      <div className="h-3 w-3/4 bg-slate-50 dark:bg-slate-700 rounded animate-pulse mt-1"></div>
                   )}
                 </div>
 
                 <div className="flex flex-col items-end gap-3">
                    <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${
-                     word.status === WordStatus.Mastered ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                     word.status === WordStatus.Learning ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                     'bg-indigo-50 text-indigo-600 border-indigo-100'
+                     word.status === WordStatus.Mastered ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800' :
+                     word.status === WordStatus.Learning ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-800' :
+                     'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-800'
                    }`}>
                      {word.status === WordStatus.New ? '新词' : word.status === WordStatus.Learning ? '学习中' : '已掌握'}
                    </span>
-                   
                    {word.examSource ? (
-                        <div className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-md border border-amber-100">
+                        <div className="flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded-md border border-amber-100 dark:border-amber-900">
                             <span>真题</span>
                         </div>
                    ) : (
-                        <div className="flex items-center gap-1 text-[10px] font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-md">
+                        <div className="flex items-center gap-1 text-[10px] font-medium text-slate-400 bg-slate-50 dark:bg-slate-700 px-2 py-1 rounded-md">
                             <Clock size={10} />
                             {formatNextReview(word.nextReview)}
                         </div>
@@ -165,29 +171,27 @@ export const WordList: React.FC<WordListProps> = ({ words, onDelete, onEnrich, o
                 </div>
               </div>
 
-              {/* Click Hint */}
               <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity translate-x-4 group-hover:translate-x-0 duration-300">
-                  <ChevronRight className="text-indigo-200" />
+                  <ChevronRight className="text-indigo-200 dark:text-indigo-800" />
               </div>
 
-              {/* Hover Actions (Stop Propagation to prevent opening detail when clicking action) */}
-              <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-slate-50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+              <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-slate-50 dark:border-slate-700 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                 <button 
                     onClick={(e) => { e.stopPropagation(); playAudio(word.term); }} 
-                    className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="发音">
+                    className="p-2 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 rounded-lg transition-colors" title="发音">
                   <Volume2 size={16} />
                 </button>
                 <button 
                   onClick={(e) => { e.stopPropagation(); onEnrich(word); }} 
                   disabled={isEnriching}
-                  className="p-2 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50"
+                  className="p-2 text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/50 rounded-lg transition-colors disabled:opacity-50"
                   title="AI 重新生成"
                 >
                   <BrainCircuit size={16} className={isEnriching ? "animate-pulse" : ""} />
                 </button>
                 <button 
                     onClick={(e) => { e.stopPropagation(); onDelete(word.id); }} 
-                    className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="删除">
+                    className="p-2 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/50 rounded-lg transition-colors" title="删除">
                   <Trash2 size={16} />
                 </button>
               </div>

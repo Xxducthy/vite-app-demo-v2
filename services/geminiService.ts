@@ -171,3 +171,37 @@ JSON ONLY. No filler.`;
       clearTimeout(timeoutId);
   }
 };
+
+// NEW: Generate Contextual Story
+export const generateStory = async (words: string[]): Promise<{english: string, chinese: string}> => {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API Key missing");
+
+  const systemPrompt = `You are a helpful English teacher. 
+Task: Write a short, coherent, and slightly funny story (max 120 words) using ALL the following words: ${words.join(', ')}.
+Requirements:
+1. Highlight the keywords in the English story using **bold** markdown (e.g., **apple**).
+2. Provide a Chinese translation below it.
+3. Return JSON format only: { "english": "...", "chinese": "..." }`;
+
+  try {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+        body: JSON.stringify({
+            model: "deepseek-chat",
+            messages: [
+                { role: "user", content: systemPrompt }
+            ],
+            temperature: 0.7,
+            stream: false
+        })
+      });
+
+      const data = await response.json();
+      return parseJsonFromLLM(data.choices[0].message.content);
+  } catch (error) {
+      console.error(error);
+      throw new Error("Failed to generate story");
+  }
+};

@@ -10,13 +10,14 @@ import { InstallGuide } from './components/InstallGuide';
 import { SettingsModal } from './components/SettingsModal'; 
 import { StudySession } from './components/StudySession';
 import { Dashboard } from './components/Dashboard';
+import { CommutePlayer } from './components/CommutePlayer';
 import { enrichWordWithAI, batchEnrichWords } from './services/geminiService';
-import { Book, List, Plus, GraduationCap, AlertCircle, Search, Download, Settings } from 'lucide-react';
+import { Book, List, Plus, GraduationCap, AlertCircle, Search, Settings } from 'lucide-react';
 
 const STORAGE_KEY = 'kaoyan_vocab_progress_v1';
 const HISTORY_KEY = 'kaoyan_study_history_v1';
 const SESSION_STORAGE_KEY = 'kaoyan_session_state_v1';
-const APP_VERSION = 'v7.0 (Dashboard & Spelling)';
+const APP_VERSION = 'v7.1 (Story + Commute + Dark)';
 
 const App: React.FC = () => {
   // --- Data State ---
@@ -48,7 +49,10 @@ const App: React.FC = () => {
   const [isIOS, setIsIOS] = useState(false);
   const [showInstallGuide, setShowInstallGuide] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [dailyGoal, setDailyGoal] = useState(50); // Loaded from LS in effect
+  const [dailyGoal, setDailyGoal] = useState(50);
+  
+  // New: Commute Mode Playlist
+  const [commutePlaylist, setCommutePlaylist] = useState<Word[] | null>(null);
 
   // --- Session State ---
   const [initialSessionState] = useState(() => {
@@ -66,19 +70,14 @@ const App: React.FC = () => {
   const [lastBatchSize, setLastBatchSize] = useState(initialSessionState?.lastBatchSize || 20); 
   const [sessionLearningStreaks, setSessionLearningStreaks] = useState<Record<string, number>>(initialSessionState?.sessionLearningStreaks || {});
   const [sessionStats, setSessionStats] = useState<Record<string, number>>(initialSessionState?.sessionStats || {});
-  
-  // New: Study Mode (Flashcard vs Spelling)
   const [studyMode, setStudyMode] = useState<StudyMode>(initialSessionState?.studyMode || 'flashcard');
 
   // --- Derived State ---
-  // Global Queue (All words due) sorted by Priority
   const globalStudyQueue = words
     .filter(w => w.nextReview <= now)
     .sort((a, b) => {
-        // Priority 1: Interval 0 (Forgotten/New) words first
         if (a.interval === 0 && b.interval !== 0) return -1;
         if (a.interval !== 0 && b.interval === 0) return 1;
-        // Priority 2: Overdue amount
         return a.nextReview - b.nextReview;
     });
 
@@ -97,6 +96,15 @@ const App: React.FC = () => {
      const interval = setInterval(() => setNow(Date.now()), 30000);
      const goal = localStorage.getItem('daily_word_goal');
      if (goal) setDailyGoal(parseInt(goal, 10));
+     
+     // Initialize Dark Mode from LocalStorage
+     const theme = localStorage.getItem('kaoyan_theme');
+     if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+         document.documentElement.classList.add('dark');
+     } else {
+         document.documentElement.classList.remove('dark');
+     }
+
      return () => clearInterval(interval);
   }, []);
 
@@ -108,7 +116,6 @@ const App: React.FC = () => {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(studyHistory));
   }, [studyHistory]);
 
-  // Auto-Save Session
   useEffect(() => {
       const sessionState = {
           isSessionActive,
@@ -173,17 +180,12 @@ const App: React.FC = () => {
       setSessionStats({});
       setSessionLearningStreaks({});
       setHasFinishedSession(false);
-      // NOTE: We don't change mode here, user stays in 'study' view which shows Dashboard now
   };
 
   const handleStatusChange = useCallback((id: string, actionStatus: WordStatus) => {
-    // 0. Update Study History
     updateHistory();
-
-    // 1. Update Session Attempts
     setSessionStats(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
 
-    // 2. SRS Logic
     setWords(prev => prev.map(w => {
       if (w.id !== id) return w;
       const currentTime = Date.now();
@@ -209,7 +211,6 @@ const App: React.FC = () => {
       return { ...w, status: newStatus, interval, easeFactor, repetitions, nextReview, lastReviewed: currentTime };
     }));
     
-    // 3. Queue Logic
     const currentStreak = sessionLearningStreaks[id];
     const isInPenaltyLoop = currentStreak !== undefined; 
 
@@ -217,7 +218,6 @@ const App: React.FC = () => {
         if (isInPenaltyLoop) {
             const newStreak = currentStreak + 1;
             setSessionLearningStreaks(prev => ({ ...prev, [id]: newStreak }));
-            
             if (newStreak >= 3) {
                 setSessionQueue(prev => {
                     const rest = prev.slice(1);
@@ -306,139 +306,45 @@ const App: React.FC = () => {
       handleExitSession();
   };
 
+  const handleCommutePlay = (playlist: Word[]) => {
+      setCommutePlaylist(playlist);
+  };
+
   const masteredCount = Math.max(0, sessionInitialCount - sessionQueue.length);
   const progressPercent = sessionInitialCount > 0 ? (masteredCount / sessionInitialCount) * 100 : 0;
   const struggleCount = Object.keys(sessionLearningStreaks).length;
   const directCount = Math.max(0, sessionInitialCount - struggleCount);
-
-  // --- RENDER ---
-  const renderStudyView = () => {
-      // 1. Session Active OR Finished -> Show Session UI
-      if (isSessionActive || hasFinishedSession) {
-          if (hasFinishedSession) {
-             return (
-                 <StudySession 
-                    totalDue={globalStudyQueue.length}
-                    totalWords={words.length}
-                    onStartSession={handleStartSession}
-                    onExit={() => { setHasFinishedSession(false); }}
-                    isFinished={true}
-                    nextBatchSize={lastBatchSize}
-                    sessionDirectCount={directCount}
-                    sessionStruggleCount={struggleCount}
-                    onContinue={() => handleStartSession(lastBatchSize, false)}
-                    onReviewAgain={() => handleStartSession(lastSessionIds, true)}
-                    studyMode={studyMode}
-                    setStudyMode={setStudyMode}
-                 />
-             );
-          }
-          if (currentWord) {
-             return (
-                <div className="w-full h-full flex flex-col items-center justify-center">
-                   <Flashcard 
-                      key={currentWord.id} 
-                      word={currentWord} 
-                      sessionAttempts={sessionStats[currentWord.id] || 0}
-                      learningStreak={sessionLearningStreaks[currentWord.id]}
-                      onStatusChange={handleStatusChange} 
-                      onNext={handleNext} 
-                      mode={studyMode}
-                   />
-                   <div className="w-full max-w-xs mt-6 animate-in fade-in slide-in-from-bottom-4">
-                      <div className="flex justify-between items-end mb-1.5 px-1">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">本组进度</span>
-                          <span className="text-xs font-bold font-mono text-indigo-600">{masteredCount} <span className="text-slate-300">/</span> {sessionInitialCount}</span>
-                      </div>
-                      <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden">
-                          <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-500 ease-out" style={{ width: `${progressPercent}%` }}></div>
-                      </div>
-                   </div>
-                </div>
-             );
-          }
-          return <div className="flex items-center justify-center h-full"><div className="animate-spin text-indigo-200"><Settings size={32} /></div></div>;
-      }
-      
-      // 2. Setup Screen (But we insert Dashboard before setup logic if queue is not active)
-      // Actually, let's use a simpler approach:
-      // If we are "in between" sessions, show Dashboard.
-      // Dashboard "Start" button triggers the setup state which is handled by StudySession component?
-      // Wait, StudySession handles setup internally.
-      // Let's wrap StudySession with Dashboard logic.
-      
-      // If user hasn't started a session, we show Dashboard.
-      // But StudySession component includes the "Setup" screen.
-      // We will conditionally render: Dashboard -> Setup -> Active.
-      // Since `StudySession` component *is* the setup screen when !active, we can just replace it 
-      // with Dashboard if we want Dashboard to be the root.
-      // BUT the user wants to see the Setup screen eventually.
-      
-      // Let's add a `showSetup` state local to App? No, keep it simple.
-      // Default view is Dashboard. Dashboard has "Start Study".
-      // Clicking "Start Study" shows `StudySession` (Setup).
-      
-      return (
-         <div className="h-full w-full">
-            {/* We cheat slightly: We use a local state in the render to toggle Dashboard vs Setup if needed, 
-                but StudySession component ALREADY handles setup. 
-                So: Show Dashboard. Clicking Start -> We need to transition to Setup. 
-                We can add a `isSetupMode` state.
-            */}
-            {/* For now, let's integrate Dashboard as the default "Idle" view, replacing the StudySession setup? 
-                No, StudySession setup has important options (count, cram mode).
-                Let's make Dashboard the FIRST view.
-            */}
-             <Dashboard 
-                history={studyHistory} 
-                dailyGoal={dailyGoal} 
-                totalWords={words.length} 
-                onStart={() => setIsSessionActive(true)} // Wait, setting active=true with empty queue causes bugs.
-                // Hack: We need a way to show StudySession (Setup).
-                // Let's repurpose a state.
-             />
-             {/* 
-                Wait, this logic is getting complex.
-                Let's change: 
-                - isSessionActive: false
-                - showSetup: false (Default) -> Shows Dashboard
-                - showSetup: true -> Shows StudySession (Setup)
-             */}
-         </div>
-      );
-  };
-
-  // Re-evaluating the render logic to incorporate Dashboard correctly
-  const [showSetup, setShowSetup] = useState(false);
   
-  // When exiting a session, go back to Dashboard
-  const finalHandleExit = () => {
-      handleExitSession();
-      setShowSetup(false);
-  };
+  // Get terms for story generation (just finished batch)
+  const lastSessionWords = lastSessionIds.map(id => words.find(w => w.id === id)?.term).filter(Boolean) as string[];
+
+  const [showSetup, setShowSetup] = useState(false);
+  const finalHandleExit = () => { handleExitSession(); setShowSetup(false); };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 text-slate-900 relative selection:bg-indigo-100 selection:text-indigo-700 font-sans">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-black text-slate-900 dark:text-slate-100 relative selection:bg-indigo-100 selection:text-indigo-700 font-sans transition-colors">
+      {commutePlaylist && <CommutePlayer playlist={commutePlaylist} onClose={() => setCommutePlaylist(null)} />}
+      
       {showInstallGuide && <InstallGuide onClose={() => setShowInstallGuide(false)} isIOS={isIOS} />}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} currentWords={words} onRestoreData={(d) => setWords(d)} onClearData={handleClearData} appVersion={APP_VERSION} />}
 
-      <div className="fixed top-[-10%] left-[-10%] w-[500px] h-[500px] bg-indigo-100/60 rounded-full blur-[80px] pointer-events-none z-0"></div>
-      <div className="fixed bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-purple-100/50 rounded-full blur-[80px] pointer-events-none z-0"></div>
+      <div className="fixed top-[-10%] left-[-10%] w-[500px] h-[500px] bg-indigo-100/60 dark:bg-indigo-900/20 rounded-full blur-[80px] pointer-events-none z-0"></div>
+      <div className="fixed bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-purple-100/50 dark:bg-purple-900/20 rounded-full blur-[80px] pointer-events-none z-0"></div>
 
       <header className="fixed top-0 left-0 right-0 z-50 px-4 pb-3 transition-all duration-300" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}>
-        <div className="max-w-2xl mx-auto bg-white/80 backdrop-blur-xl border border-white/60 shadow-sm rounded-2xl px-4 py-2.5 flex justify-between items-center gap-3 relative">
+        <div className="max-w-2xl mx-auto bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-white/60 dark:border-slate-800 shadow-sm rounded-2xl px-4 py-2.5 flex justify-between items-center gap-3 relative">
           <div className="flex items-center gap-2 shrink-0 cursor-pointer group" onClick={() => { setMode('study'); setShowSetup(false); }}>
-            <div className="bg-slate-900 p-1.5 rounded-lg shadow-md group-hover:scale-105 transition-transform"><GraduationCap className="text-white" size={18} /></div>
-            <span className="font-bold text-slate-800 text-sm tracking-tight hidden xs:block">考研 AI</span>
+            <div className="bg-slate-900 dark:bg-indigo-600 p-1.5 rounded-lg shadow-md group-hover:scale-105 transition-transform"><GraduationCap className="text-white" size={18} /></div>
+            <span className="font-bold text-slate-800 dark:text-white text-sm tracking-tight hidden xs:block">考研 AI</span>
           </div>
           <div className="flex-1 max-w-xs relative group">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-            <input type="text" placeholder="Search..." className="w-full pl-9 pr-3 py-1.5 bg-slate-100/80 border-none rounded-xl text-sm outline-none focus:bg-white transition-all" value={searchTerm} onChange={(e) => handleSearchChange(e.target.value)} onFocus={() => { if(searchTerm) setShowSearchDropdown(true); }} onBlur={() => setTimeout(() => setShowSearchDropdown(false), 250)} onKeyDown={(e) => { if (e.key === 'Enter' && searchTerm.trim()) handleLookup(searchTerm); }} />
+            <input type="text" placeholder="Search..." className="w-full pl-9 pr-3 py-1.5 bg-slate-100/80 dark:bg-slate-800 border-none rounded-xl text-sm outline-none focus:bg-white dark:focus:bg-slate-700 transition-all text-slate-900 dark:text-slate-100" value={searchTerm} onChange={(e) => handleSearchChange(e.target.value)} onFocus={() => { if(searchTerm) setShowSearchDropdown(true); }} onBlur={() => setTimeout(() => setShowSearchDropdown(false), 250)} onKeyDown={(e) => { if (e.key === 'Enter' && searchTerm.trim()) handleLookup(searchTerm); }} />
             {showSearchDropdown && (
-               <div className="absolute top-full left-0 right-0 mt-2 bg-white/95 backdrop-blur-xl rounded-xl shadow-xl border border-slate-100 overflow-hidden z-50 max-h-[50vh] overflow-y-auto">
+               <div className="absolute top-full left-0 right-0 mt-2 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden z-50 max-h-[50vh] overflow-y-auto">
                   {searchSuggestions.map(s => (
-                     <div key={s.term} className="px-4 py-2.5 hover:bg-slate-50 cursor-pointer border-b border-slate-50/50 flex justify-between items-center" onClick={() => handleLookup(s.term)}>
-                        <div><span className="font-bold text-sm text-slate-700">{s.term}</span> <span className="text-xs text-slate-400 ml-1">{s.definition}</span></div>
+                     <div key={s.term} className="px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer border-b border-slate-50/50 dark:border-slate-800 flex justify-between items-center" onClick={() => handleLookup(s.term)}>
+                        <div><span className="font-bold text-sm text-slate-700 dark:text-slate-200">{s.term}</span> <span className="text-xs text-slate-400 ml-1">{s.definition}</span></div>
                         <Plus size={14} className="text-slate-300" onClick={(e) => {e.stopPropagation(); handleQuickAdd(s.term)}}/>
                      </div>
                   ))}
@@ -446,7 +352,7 @@ const App: React.FC = () => {
             )}
           </div>
           <div className="flex gap-1.5 shrink-0">
-             <button onClick={() => setShowSettings(true)} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"><Settings size={18} /></button>
+             <button onClick={() => setShowSettings(true)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><Settings size={18} /></button>
           </div>
         </div>
       </header>
@@ -457,7 +363,6 @@ const App: React.FC = () => {
         <div className="w-full h-full max-w-2xl mx-auto transition-all duration-500">
           {mode === 'study' && (
              isSessionActive || hasFinishedSession ? (
-                 // Active Session or Summary
                  hasFinishedSession ? (
                     <StudySession 
                         totalDue={globalStudyQueue.length}
@@ -472,6 +377,7 @@ const App: React.FC = () => {
                         onReviewAgain={() => handleStartSession(lastSessionIds, true)}
                         studyMode={studyMode}
                         setStudyMode={setStudyMode}
+                        completedWordTerms={lastSessionWords} // Pass words for story
                     />
                  ) : currentWord ? (
                     <div className="w-full h-full flex flex-col items-center justify-center">
@@ -487,16 +393,15 @@ const App: React.FC = () => {
                         <div className="w-full max-w-xs mt-6 animate-in fade-in slide-in-from-bottom-4">
                             <div className="flex justify-between items-end mb-1.5 px-1">
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">本组进度</span>
-                                <span className="text-xs font-bold font-mono text-indigo-600">{masteredCount} <span className="text-slate-300">/</span> {sessionInitialCount}</span>
+                                <span className="text-xs font-bold font-mono text-indigo-600 dark:text-indigo-400">{masteredCount} <span className="text-slate-300 dark:text-slate-600">/</span> {sessionInitialCount}</span>
                             </div>
-                            <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden">
+                            <div className="h-2 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
                                 <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-500 ease-out" style={{ width: `${progressPercent}%` }}></div>
                             </div>
                         </div>
                     </div>
                  ) : <div className="flex items-center justify-center h-full"><div className="animate-spin text-indigo-200"><Settings size={32} /></div></div>
              ) : showSetup ? (
-                 // Setup Screen
                  <StudySession 
                     totalDue={globalStudyQueue.length}
                     totalWords={words.length}
@@ -506,7 +411,6 @@ const App: React.FC = () => {
                     setStudyMode={setStudyMode}
                  />
              ) : (
-                 // Dashboard
                  <Dashboard 
                     history={studyHistory}
                     dailyGoal={dailyGoal}
@@ -517,8 +421,18 @@ const App: React.FC = () => {
           )}
 
           {mode === 'list' && (
-            <div className="h-full bg-white/60 backdrop-blur-md rounded-3xl shadow-sm border border-white/50 overflow-hidden">
-              <WordList words={words} onDelete={handleDelete} onEnrich={handleEnrichWord} onImport={handleImport} onLookup={handleLookup} onSelectWord={(w) => {setLookupTerm(w.term); setMode('dictionary');}} isEnriching={isLoading} searchTerm={searchTerm} />
+            <div className="h-full bg-white/60 dark:bg-slate-900/60 backdrop-blur-md rounded-3xl shadow-sm border border-white/50 dark:border-slate-800 overflow-hidden">
+              <WordList 
+                words={words} 
+                onDelete={handleDelete} 
+                onEnrich={handleEnrichWord} 
+                onImport={handleImport} 
+                onLookup={handleLookup} 
+                onSelectWord={(w) => {setLookupTerm(w.term); setMode('dictionary');}} 
+                onPlayCommute={handleCommutePlay}
+                isEnriching={isLoading} 
+                searchTerm={searchTerm} 
+              />
             </div>
           )}
 
@@ -535,12 +449,12 @@ const App: React.FC = () => {
       </main>
 
       {mode !== 'dictionary' && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5 p-1.5 bg-white/80 backdrop-blur-xl border border-white/50 shadow-2xl shadow-indigo-500/10 rounded-2xl ring-1 ring-white/50 animate-in slide-in-from-bottom-6">
-            <button onClick={() => {setMode('study'); setShowSetup(false);}} className={`flex items-center gap-2 px-4 py-3 rounded-xl transition-all font-bold text-sm ${mode === 'study' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-100'}`}><Book size={18} strokeWidth={2.5} /><span className={mode === 'study' ? 'block' : 'hidden'}>Study</span></button>
-            <div className="w-px h-6 bg-slate-200 mx-1"></div>
-            <button onClick={() => setMode('import')} className={`p-3 rounded-xl transition-all ${mode === 'import' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 rotate-90' : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'}`}><Plus size={22} strokeWidth={3} /></button>
-            <div className="w-px h-6 bg-slate-200 mx-1"></div>
-            <button onClick={() => setMode('list')} className={`flex items-center gap-2 px-4 py-3 rounded-xl transition-all font-bold text-sm ${mode === 'list' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-100'}`}><List size={18} strokeWidth={2.5} /><span className={mode === 'list' ? 'block' : 'hidden'}>List</span></button>
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5 p-1.5 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-white/50 dark:border-slate-800 shadow-2xl shadow-indigo-500/10 dark:shadow-none rounded-2xl ring-1 ring-white/50 dark:ring-slate-800 animate-in slide-in-from-bottom-6">
+            <button onClick={() => {setMode('study'); setShowSetup(false);}} className={`flex items-center gap-2 px-4 py-3 rounded-xl transition-all font-bold text-sm ${mode === 'study' ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-lg' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}><Book size={18} strokeWidth={2.5} /><span className={mode === 'study' ? 'block' : 'hidden'}>Study</span></button>
+            <div className="w-px h-6 bg-slate-200 dark:bg-slate-800 mx-1"></div>
+            <button onClick={() => setMode('import')} className={`p-3 rounded-xl transition-all ${mode === 'import' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none rotate-90' : 'text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30'}`}><Plus size={22} strokeWidth={3} /></button>
+            <div className="w-px h-6 bg-slate-200 dark:bg-slate-800 mx-1"></div>
+            <button onClick={() => setMode('list')} className={`flex items-center gap-2 px-4 py-3 rounded-xl transition-all font-bold text-sm ${mode === 'list' ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-lg' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}><List size={18} strokeWidth={2.5} /><span className={mode === 'list' ? 'block' : 'hidden'}>List</span></button>
         </div>
       )}
     </div>
