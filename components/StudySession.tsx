@@ -1,6 +1,7 @@
 
 import React from 'react';
-import { Play, CheckCircle2, Coffee, ArrowRight, Layers, Shuffle, RotateCcw, Dumbbell, Zap, AlertTriangle } from 'lucide-react';
+import { Play, CheckCircle2, Coffee, ArrowRight, Layers, Shuffle, RotateCcw, Dumbbell, Zap, AlertTriangle, PenTool, BookOpen } from 'lucide-react';
+import { StudyMode } from '../types';
 
 interface StudySessionProps {
   totalDue: number;
@@ -13,6 +14,8 @@ interface StudySessionProps {
   nextBatchSize?: number;
   sessionDirectCount?: number;
   sessionStruggleCount?: number;
+  studyMode: StudyMode;
+  setStudyMode: (mode: StudyMode) => void;
 }
 
 export const StudySession: React.FC<StudySessionProps> = ({ 
@@ -25,7 +28,9 @@ export const StudySession: React.FC<StudySessionProps> = ({
   onReviewAgain,
   nextBatchSize = 20,
   sessionDirectCount = 0,
-  sessionStruggleCount = 0
+  sessionStruggleCount = 0,
+  studyMode,
+  setStudyMode
 }) => {
   
   // --- SESSION COMPLETE VIEW ---
@@ -98,6 +103,24 @@ export const StudySession: React.FC<StudySessionProps> = ({
   return (
     <div className="w-full h-full flex flex-col items-center justify-center p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="bg-white/80 backdrop-blur-xl border border-white p-8 rounded-[2rem] shadow-2xl shadow-indigo-100 w-full max-w-sm text-center">
+         
+         <div className="flex justify-center mb-6">
+            <div className="bg-slate-100 p-1 rounded-xl flex gap-1">
+                <button 
+                    onClick={() => setStudyMode('flashcard')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${studyMode === 'flashcard' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}
+                >
+                    <BookOpen size={14} /> 翻卡模式
+                </button>
+                <button 
+                    onClick={() => setStudyMode('spelling')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${studyMode === 'spelling' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}
+                >
+                    <PenTool size={14} /> 拼写模式
+                </button>
+            </div>
+         </div>
+
          <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 transform -rotate-6 ${isAllCaughtUp ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-50 text-indigo-600'}`}>
             {isAllCaughtUp ? <CheckCircle2 size={32} /> : <Layers size={32} />}
          </div>
@@ -166,10 +189,6 @@ export const StudySession: React.FC<StudySessionProps> = ({
          )}
 
       </div>
-      
-      <button onClick={onExit} className="mt-8 text-slate-400 hover:text-slate-600 text-sm font-medium underline underline-offset-4">
-          查看词表
-      </button>
     </div>
   );
 };

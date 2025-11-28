@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Key, Database, Download, Upload, Copy, ClipboardPaste, FileText, AlertTriangle, Check } from 'lucide-react';
+import { X, Key, Database, Download, Upload, Copy, ClipboardPaste, FileText, AlertTriangle, Check, Target } from 'lucide-react';
 import { Word } from '../types';
 
 interface SettingsModalProps {
@@ -14,6 +14,7 @@ interface SettingsModalProps {
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWords, onRestoreData, onMergeData, onClearData, appVersion }) => {
   const [apiKey, setApiKey] = useState('');
+  const [dailyGoal, setDailyGoal] = useState<number>(50);
   const [activeTab, setActiveTab] = useState<'code' | 'file'>('code');
   const [syncString, setSyncString] = useState('');
   const [copyMsg, setCopyMsg] = useState<{type: 'success'|'error', text: string} | null>(null);
@@ -22,10 +23,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
 
   useEffect(() => {
     setApiKey(localStorage.getItem('custom_api_key') || '');
+    const savedGoal = localStorage.getItem('daily_word_goal');
+    if (savedGoal) {
+        setDailyGoal(parseInt(savedGoal, 10));
+    }
   }, []);
 
-  const handleSaveKey = () => {
+  const handleSaveSettings = () => {
     localStorage.setItem('custom_api_key', apiKey.trim());
+    localStorage.setItem('daily_word_goal', dailyGoal.toString());
     window.location.reload(); 
   };
 
@@ -210,21 +216,46 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
             </div>
           )}
 
-          {/* --- API Key Section --- */}
-          <div className="pt-4 border-t border-slate-100 space-y-3">
-            <div className="flex items-center gap-2 text-slate-400 font-bold text-xs uppercase tracking-wider">
-                <Key size={14} />
-                <span>DeepSeek API Key</span>
+          {/* --- Settings Section --- */}
+          <div className="pt-4 border-t border-slate-100 space-y-4">
+            
+            {/* Daily Goal */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-slate-500 font-bold text-xs uppercase tracking-wider">
+                    <Target size={14} />
+                    <span>每日学习目标</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <input 
+                        type="number" 
+                        value={dailyGoal}
+                        onChange={(e) => setDailyGoal(Number(e.target.value))}
+                        min={5}
+                        step={5}
+                        className="w-16 p-2 border border-slate-200 rounded-lg text-xs font-mono outline-none focus:border-indigo-500 text-center"
+                    />
+                    <span className="text-xs text-slate-400">词</span>
+                </div>
             </div>
-            <div className="flex gap-2">
-                <input 
-                type="text" 
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-..."
-                className="flex-1 p-2 border border-slate-200 rounded-lg text-xs font-mono outline-none focus:border-indigo-500"
-                />
-                <button onClick={handleSaveKey} className="bg-slate-800 text-white px-3 rounded-lg text-xs font-bold">保存</button>
+
+            {/* API Key */}
+            <div className="space-y-2">
+                <div className="flex items-center gap-2 text-slate-400 font-bold text-xs uppercase tracking-wider">
+                    <Key size={14} />
+                    <span>DeepSeek API Key</span>
+                </div>
+                <div className="flex gap-2">
+                    <input 
+                    type="text" 
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="sk-..."
+                    className="flex-1 p-2 border border-slate-200 rounded-lg text-xs font-mono outline-none focus:border-indigo-500"
+                    />
+                    <button onClick={handleSaveSettings} className="bg-slate-800 text-white px-3 rounded-lg text-xs font-bold hover:bg-slate-700 whitespace-nowrap">
+                        保存设置
+                    </button>
+                </div>
             </div>
           </div>
 
