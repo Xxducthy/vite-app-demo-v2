@@ -10,7 +10,6 @@ import { SettingsModal } from './components/SettingsModal';
 import { StudySession } from './components/StudySession';
 import { Dashboard } from './components/Dashboard';
 import { CommutePlayer } from './components/CommutePlayer';
-import { ArticleReader } from './components/ArticleReader';
 import { LoveStore } from './components/LoveStore';
 import { enrichWordWithAI, batchEnrichWords, generateStory } from './services/geminiService';
 import { Book, List, Plus, GraduationCap, AlertCircle, Search, Settings, BookOpen, Gift } from 'lucide-react';
@@ -18,7 +17,7 @@ import { Book, List, Plus, GraduationCap, AlertCircle, Search, Settings, BookOpe
 const STORAGE_KEY = 'kaoyan_vocab_progress_v1';
 const HISTORY_KEY = 'kaoyan_study_history_v1';
 const SESSION_STORAGE_KEY = 'kaoyan_session_state_v1';
-const APP_VERSION = 'v8.0 (Exam Master)';
+const APP_VERSION = 'v8.1 (Exam Master)';
 
 const App: React.FC = () => {
   // --- Data State ---
@@ -49,13 +48,19 @@ const App: React.FC = () => {
 
   const DEFAULT_SHOP_ITEMS: ShopItem[] = [
       { id: 'item-1', name: '奶茶券', cost: 50, description: '请喝一杯喜欢的奶茶 (无视排队)', icon: '🧋', isCustom: false },
+      { id: 'item-12', name: '叫醒服务', cost: 20, description: '明天早上打电话叫我起床，要温柔', icon: '⏰', isCustom: false },
       { id: 'item-2', name: '跑腿卡', cost: 30, description: '代取快递 / 或是去食堂买饭带回宿舍', icon: '🏃', isCustom: false },
-      { id: 'item-3', name: '专属按摩', cost: 100, description: '自习累了？肩颈/手部按摩 20分钟', icon: '💆', isCustom: false },
-      { id: 'item-4', name: '早起占座', cost: 60, description: '图书馆/自习室帮忙占个好位置', icon: '📚', isCustom: false },
-      { id: 'item-5', name: '操场散步', cost: 50, description: '放下手机，陪你在操场散步/夜聊一小时', icon: '🌙', isCustom: false },
       { id: 'item-6', name: '剥虾/水果', cost: 40, description: '吃饭时我不动手，只张嘴', icon: '🍤', isCustom: false },
+      { id: 'item-5', name: '操场散步', cost: 50, description: '放下手机，陪你在操场散步/夜聊一小时', icon: '🌙', isCustom: false },
+      { id: 'item-13', name: '帮背书包', cost: 50, description: '今天的书包有点重，归你了', icon: '🎒', isCustom: false },
+      { id: 'item-4', name: '早起占座', cost: 60, description: '图书馆/自习室帮忙占个好位置', icon: '📚', isCustom: false },
+      { id: 'item-14', name: '专属点歌', cost: 60, description: '想听什么你来唱，不许拒绝', icon: '🎤', isCustom: false },
+      { id: 'item-15', name: '吹头发', cost: 80, description: '洗完澡帮我吹干头发，享受服务', icon: '💇‍♀️', isCustom: false },
+      { id: 'item-3', name: '专属按摩', cost: 100, description: '自习累了？肩颈/手部按摩 20分钟', icon: '💆', isCustom: false },
+      { id: 'item-16', name: '恐怖片护体', cost: 120, description: '陪看恐怖片，提供全程遮挡和抱抱服务', icon: '👻', isCustom: false },
       { id: 'item-7', name: '游戏带飞', cost: 150, description: '陪玩不坑，或者把把C', icon: '🎮', isCustom: false },
-      { id: 'item-8', name: '朋友圈特权', cost: 300, description: '发一条指定内容的朋友圈 (秀恩爱专用)', icon: '📸', isCustom: false },
+      { id: 'item-17', name: '专属摄影师', cost: 200, description: '出门游玩负责拍照，拍到满意为止', icon: '📸', isCustom: false },
+      { id: 'item-8', name: '朋友圈特权', cost: 300, description: '发一条指定内容的朋友圈 (秀恩爱专用)', icon: '❤️', isCustom: false },
       { id: 'item-9', name: '停止冷战', cost: 600, description: '无论谁错，立刻和好，不许翻旧账', icon: '🏳️', isCustom: false },
       { id: 'item-10', name: '绝对服从券', cost: 800, description: '在合理范围内，无条件听从一个指令', icon: '👑', isCustom: false },
       { id: 'item-11', name: '神秘礼物', cost: 1000, description: '兑换一个实体小礼物 (口红/模型/周边)', icon: '🎁', isCustom: false },
@@ -283,8 +288,10 @@ const App: React.FC = () => {
       setShopItems(prev => [newItem, ...prev]);
   };
 
-  const handleDeleteCustomItem = (id: string) => {
-      setShopItems(prev => prev.filter(i => i.id !== id));
+  const handleDeleteItem = (id: string) => {
+      if (confirm("确定要下架这个商品吗？")) {
+          setShopItems(prev => prev.filter(i => i.id !== id));
+      }
   };
 
   const handleStatusChange = useCallback((id: string, actionStatus: WordStatus) => {
@@ -529,12 +536,6 @@ const App: React.FC = () => {
              )
           )}
 
-          {mode === 'reader' && (
-              <div className="h-full bg-white/60 dark:bg-slate-900/60 backdrop-blur-md rounded-3xl shadow-sm border border-white/50 dark:border-slate-800 overflow-hidden">
-                  <ArticleReader words={words} onLookup={handleLookup} />
-              </div>
-          )}
-
           {mode === 'list' && (
             <div className="h-full bg-white/60 dark:bg-slate-900/60 backdrop-blur-md rounded-3xl shadow-sm border border-white/50 dark:border-slate-800 overflow-hidden">
               <WordList 
@@ -566,7 +567,7 @@ const App: React.FC = () => {
                     onPurchase={handlePurchase}
                     onUseCoupon={handleUseCoupon}
                     onAddCustomItem={handleAddCustomItem}
-                    onDeleteCustomItem={handleDeleteCustomItem}
+                    onDeleteItem={handleDeleteItem}
                   />
               </div>
           )}
@@ -580,8 +581,6 @@ const App: React.FC = () => {
       {mode !== 'dictionary' && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5 p-1.5 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-white/50 dark:border-slate-800 shadow-2xl shadow-indigo-500/10 dark:shadow-none rounded-2xl ring-1 ring-white/50 dark:ring-slate-800 animate-in slide-in-from-bottom-6">
             <button onClick={() => {setMode('study'); setShowSetup(false);}} className={`flex items-center gap-2 px-4 py-3 rounded-xl transition-all font-bold text-sm ${mode === 'study' ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-lg' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}><Book size={18} strokeWidth={2.5} /><span className={mode === 'study' ? 'block' : 'hidden'}>Study</span></button>
-            <div className="w-px h-6 bg-slate-200 dark:bg-slate-800 mx-1"></div>
-            <button onClick={() => setMode('reader')} className={`flex items-center gap-2 px-4 py-3 rounded-xl transition-all font-bold text-sm ${mode === 'reader' ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-lg' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}><BookOpen size={18} strokeWidth={2.5} /><span className={mode === 'reader' ? 'block' : 'hidden'}>Reader</span></button>
             <div className="w-px h-6 bg-slate-200 dark:bg-slate-800 mx-1"></div>
             <button onClick={() => setMode('import')} className={`p-3 rounded-xl transition-all ${mode === 'import' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none rotate-90' : 'text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30'}`}><Plus size={22} strokeWidth={3} /></button>
             <div className="w-px h-6 bg-slate-200 dark:bg-slate-800 mx-1"></div>

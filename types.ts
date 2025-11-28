@@ -46,7 +46,7 @@ export interface DictionaryEntry {
   definition: string;
 }
 
-export type ViewMode = 'study' | 'list' | 'import' | 'dictionary' | 'reader' | 'store';
+export type ViewMode = 'study' | 'list' | 'import' | 'dictionary' | 'store';
 
 // New: For Dashboard Heatmap
 export type StudyHistory = Record<string, number>; // "YYYY-MM-DD": count

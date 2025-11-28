@@ -9,7 +9,7 @@ interface LoveStoreProps {
   onPurchase: (item: ShopItem) => void;
   onUseCoupon: (couponId: string) => void;
   onAddCustomItem: (name: string, cost: number, desc: string) => void;
-  onDeleteCustomItem: (id: string) => void;
+  onDeleteItem: (id: string) => void;
 }
 
 export const LoveStore: React.FC<LoveStoreProps> = ({ 
@@ -19,7 +19,7 @@ export const LoveStore: React.FC<LoveStoreProps> = ({
   onPurchase, 
   onUseCoupon,
   onAddCustomItem,
-  onDeleteCustomItem
+  onDeleteItem
 }) => {
   const [activeTab, setActiveTab] = useState<'mall' | 'inventory'>('mall');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -104,9 +104,14 @@ export const LoveStore: React.FC<LoveStoreProps> = ({
                         const canAfford = points >= item.cost;
                         return (
                             <div key={item.id} className="bg-white dark:bg-slate-800 rounded-3xl p-4 shadow-sm border border-pink-100 dark:border-slate-700 flex flex-col relative overflow-hidden group">
-                                {item.isCustom && (
-                                    <button onClick={() => onDeleteCustomItem(item.id)} className="absolute top-2 right-2 p-1.5 text-slate-300 hover:text-rose-500 transition-colors z-10"><Trash2 size={14}/></button>
-                                )}
+                                {/* Delete Button - Enabled for ALL items */}
+                                <button 
+                                    onClick={() => onDeleteItem(item.id)} 
+                                    className="absolute top-2 right-2 p-1.5 text-slate-300 hover:text-rose-500 transition-colors z-10 opacity-0 group-hover:opacity-100"
+                                >
+                                    <Trash2 size={14}/>
+                                </button>
+                                
                                 <div className="text-4xl mb-3 text-center pt-2 transform group-hover:scale-110 transition-transform duration-300">{item.icon}</div>
                                 <h3 className="font-bold text-slate-800 dark:text-white text-center mb-1">{item.name}</h3>
                                 <p className="text-[10px] text-slate-400 text-center mb-4 line-clamp-2 min-h-[2.5em]">{item.description}</p>
