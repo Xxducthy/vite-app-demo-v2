@@ -29,6 +29,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
     window.location.reload(); 
   };
 
+  // Helper to clear session state on data changes
+  const clearSessionStorage = () => {
+      localStorage.removeItem('kaoyan_session_state_v1');
+  };
+
   // --- CODE SYNC LOGIC (Base64) ---
   const handleGenerateCode = () => {
       try {
@@ -65,6 +70,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
           if (Array.isArray(json) && onRestoreData) {
               if(confirm(`识别到 ${json.length} 个单词。\n确定要覆盖当前进度吗？`)) {
                   onRestoreData(json);
+                  clearSessionStorage(); // Clear session to prevent ID conflicts
                   setSyncString('');
                   setCopyMsg({type: 'success', text: "同步成功！"});
               }
@@ -102,8 +108,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
       try {
         const json = JSON.parse(event.target?.result as string);
         if (Array.isArray(json)) {
-            if (importMode === 'restore' && onRestoreData) onRestoreData(json);
-            else if (importMode === 'merge' && onMergeData) onMergeData(json);
+            if (importMode === 'restore' && onRestoreData) {
+                onRestoreData(json);
+                clearSessionStorage();
+            }
+            else if (importMode === 'merge' && onMergeData) {
+                onMergeData(json);
+                // Merge might not invalidate existing session, but to be safe, maybe don't clear? 
+                // Usually safe to clear active session on major data changes.
+                clearSessionStorage();
+            }
         } else { alert("文件格式错误"); }
       } catch (err) { alert("解析失败"); }
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -143,7 +157,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
           {activeTab === 'code' && (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
                <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100 text-xs text-indigo-700 leading-relaxed">
-                  复制乱码 → 微信发送 → 粘贴导入。(仅限小数据量)
+                  复制乱码 &rarr; 微信发送 &rarr; 粘贴导入。(仅限小数据量)
                </div>
                <textarea 
                   value={syncString}
@@ -170,7 +184,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
           {activeTab === 'file' && (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
                <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100 text-xs text-emerald-700 leading-relaxed">
-                  生成文件 → 微信发送 → 选择文件。(适用于大量数据)
+                  生成文件 &rarr; 微信发送 &rarr; 选择文件。(适用于大量数据)
                </div>
                <div className="grid grid-cols-1 gap-3">
                     <button onClick={handleExport} className="flex items-center justify-between px-4 py-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors group">

@@ -13,7 +13,8 @@ import { enrichWordWithAI, batchEnrichWords } from './services/geminiService';
 import { Book, List, Plus, GraduationCap, AlertCircle, Search, Download, Settings } from 'lucide-react';
 
 const STORAGE_KEY = 'kaoyan_vocab_progress_v1';
-const APP_VERSION = 'v6.8 (Auto-Next)';
+const SESSION_STORAGE_KEY = 'kaoyan_session_state_v1';
+const APP_VERSION = 'v6.9 (Auto-Save)';
 
 const App: React.FC = () => {
   // --- State ---
@@ -43,20 +44,26 @@ const App: React.FC = () => {
   const [showInstallGuide, setShowInstallGuide] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  // --- Session State ---
-  const [isSessionActive, setIsSessionActive] = useState(false);
-  const [sessionQueue, setSessionQueue] = useState<string[]>([]); // Active Queue
-  const [sessionInitialCount, setSessionInitialCount] = useState(0); // For Progress Bar
-  const [lastSessionIds, setLastSessionIds] = useState<string[]>([]); // For "Review Again"
-  const [hasFinishedSession, setHasFinishedSession] = useState(false);
-  const [lastBatchSize, setLastBatchSize] = useState(20); // Remember user preference
+  // --- Session State Initialization (Auto-Restore) ---
+  const [initialSessionState] = useState(() => {
+    try {
+      const saved = localStorage.getItem(SESSION_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) { return null; }
+  });
+
+  const [isSessionActive, setIsSessionActive] = useState(initialSessionState?.isSessionActive || false);
+  const [sessionQueue, setSessionQueue] = useState<string[]>(initialSessionState?.sessionQueue || []); 
+  const [sessionInitialCount, setSessionInitialCount] = useState(initialSessionState?.sessionInitialCount || 0); 
+  const [lastSessionIds, setLastSessionIds] = useState<string[]>(initialSessionState?.lastSessionIds || []); 
+  const [hasFinishedSession, setHasFinishedSession] = useState(initialSessionState?.hasFinishedSession || false);
+  const [lastBatchSize, setLastBatchSize] = useState(initialSessionState?.lastBatchSize || 20); 
   
   // Track consecutive correct answers WITHIN the current session for penalty words
-  // Key: Word ID, Value: Streak Count (0, 1, 2...). If undefined, it means word hasn't entered penalty loop yet.
-  const [sessionLearningStreaks, setSessionLearningStreaks] = useState<Record<string, number>>({});
+  const [sessionLearningStreaks, setSessionLearningStreaks] = useState<Record<string, number>>(initialSessionState?.sessionLearningStreaks || {});
   
   // Track total attempts for UI display only
-  const [sessionStats, setSessionStats] = useState<Record<string, number>>({});
+  const [sessionStats, setSessionStats] = useState<Record<string, number>>(initialSessionState?.sessionStats || {});
 
   // --- Derived State ---
   // Global Queue (All words due) sorted by Priority
@@ -95,6 +102,25 @@ const App: React.FC = () => {
       console.error("Failed to save to local storage", e);
     }
   }, [words]);
+
+  // --- Auto-Save Session Progress ---
+  useEffect(() => {
+      const sessionState = {
+          isSessionActive,
+          sessionQueue,
+          sessionInitialCount,
+          lastSessionIds,
+          hasFinishedSession,
+          lastBatchSize,
+          sessionLearningStreaks,
+          sessionStats
+      };
+      try {
+        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionState));
+      } catch (e) {
+        console.error("Failed to save session state", e);
+      }
+  }, [isSessionActive, sessionQueue, sessionInitialCount, lastSessionIds, hasFinishedSession, lastBatchSize, sessionLearningStreaks, sessionStats]);
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -165,6 +191,7 @@ const App: React.FC = () => {
       setSessionStats({});
       setSessionLearningStreaks({});
       setHasFinishedSession(false);
+      // NOTE: localStorage will be updated by useEffect with isSessionActive: false
       if (mode === 'study') setMode('list');
   };
 
@@ -316,21 +343,37 @@ const App: React.FC = () => {
     setShowSearchDropdown(true);
   };
 
+  // --- Reset All Data ---
+  const handleClearData = () => {
+      setWords(INITIAL_WORDS);
+      // Clear session progress as well to prevent errors
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+      setIsSessionActive(false);
+      setSessionQueue([]);
+      setSessionStats({});
+      setSessionLearningStreaks({});
+      setHasFinishedSession(false);
+  };
+
   // --- Progress Bar Calculation ---
   const masteredCount = Math.max(0, sessionInitialCount - sessionQueue.length);
   const progressPercent = sessionInitialCount > 0 ? (masteredCount / sessionInitialCount) * 100 : 0;
   
   // Stats Calculation for Summary
-  // Struggled = Number of words that exist in sessionLearningStreaks (meaning they entered penalty loop)
   const struggleCount = Object.keys(sessionLearningStreaks).length;
-  // Direct = Total - Struggled
   const directCount = Math.max(0, sessionInitialCount - struggleCount);
 
   return (
     <div className="flex flex-col h-full bg-slate-50 text-slate-900 relative selection:bg-indigo-100 selection:text-indigo-700 font-sans">
       {showInstallGuide && <InstallGuide onClose={() => setShowInstallGuide(false)} isIOS={isIOS} />}
       {showSettings && (
-        <SettingsModal onClose={() => setShowSettings(false)} currentWords={words} onRestoreData={(d) => setWords(d)} onClearData={() => setWords(INITIAL_WORDS)} appVersion={APP_VERSION} />
+        <SettingsModal 
+            onClose={() => setShowSettings(false)} 
+            currentWords={words} 
+            onRestoreData={(d) => setWords(d)} 
+            onClearData={handleClearData} 
+            appVersion={APP_VERSION} 
+        />
       )}
 
       {/* Background Blobs */}
