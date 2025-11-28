@@ -2,7 +2,6 @@
 import React, { useState } from 'react';
 import { Play, CheckCircle2, Coffee, ArrowRight, Layers, Shuffle, RotateCcw, Dumbbell, Zap, AlertTriangle, PenTool, BookOpen, Sparkles, X, Loader2 } from 'lucide-react';
 import { StudyMode } from '../types';
-import { generateStory } from '../services/geminiService';
 
 interface StudySessionProps {
   totalDue: number;
@@ -17,7 +16,9 @@ interface StudySessionProps {
   sessionStruggleCount?: number;
   studyMode: StudyMode;
   setStudyMode: (mode: StudyMode) => void;
-  completedWordTerms?: string[]; // New: for story generation
+  completedWordTerms?: string[];
+  preloadedStory?: {english: string, chinese: string} | null;
+  isStoryLoading?: boolean;
 }
 
 export const StudySession: React.FC<StudySessionProps> = ({ 
@@ -33,26 +34,12 @@ export const StudySession: React.FC<StudySessionProps> = ({
   sessionStruggleCount = 0,
   studyMode,
   setStudyMode,
-  completedWordTerms = []
+  completedWordTerms = [],
+  preloadedStory,
+  isStoryLoading
 }) => {
-  const [isGeneratingStory, setIsGeneratingStory] = useState(false);
-  const [generatedStory, setGeneratedStory] = useState<{english: string, chinese: string} | null>(null);
   const [showStoryModal, setShowStoryModal] = useState(false);
 
-  const handleGenerateStory = async () => {
-      if (!completedWordTerms.length) return;
-      setIsGeneratingStory(true);
-      setShowStoryModal(true);
-      try {
-          const result = await generateStory(completedWordTerms);
-          setGeneratedStory(result);
-      } catch (e) {
-          setGeneratedStory({ english: "Error generating story. Please check your network or API key.", chinese: "生成失败" });
-      } finally {
-          setIsGeneratingStory(false);
-      }
-  };
-  
   // --- STORY MODAL ---
   if (showStoryModal) {
       return (
@@ -72,20 +59,24 @@ export const StudySession: React.FC<StudySessionProps> = ({
                       </div>
                   </div>
 
-                  {isGeneratingStory ? (
+                  {isStoryLoading ? (
                       <div className="flex flex-col items-center justify-center py-12 space-y-4">
                           <Loader2 size={48} className="text-purple-600 animate-spin" />
-                          <p className="font-bold text-slate-600 dark:text-slate-300 animate-pulse">DeepSeek 正在编故事...</p>
+                          <p className="font-bold text-slate-600 dark:text-slate-300 animate-pulse">AI 正在后台奋笔疾书...</p>
                       </div>
-                  ) : (
+                  ) : preloadedStory ? (
                       <div className="space-y-6">
                           <div className="prose prose-slate dark:prose-invert">
-                              <p className="text-lg leading-relaxed font-serif text-slate-800 dark:text-slate-100" dangerouslySetInnerHTML={{ __html: generatedStory?.english.replace(/\*\*(.*?)\*\*/g, '<span class="text-purple-600 dark:text-purple-400 font-bold bg-purple-50 dark:bg-purple-900/30 px-1 rounded">$1</span>') || '' }}></p>
+                              <p className="text-lg leading-relaxed font-serif text-slate-800 dark:text-slate-100" dangerouslySetInnerHTML={{ __html: preloadedStory.english.replace(/\*\*(.*?)\*\*/g, '<span class="text-purple-600 dark:text-purple-400 font-bold bg-purple-50 dark:bg-purple-900/30 px-1 rounded">$1</span>') }}></p>
                           </div>
                           <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
                               <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">中文大意</h4>
-                              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{generatedStory?.chinese}</p>
+                              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{preloadedStory.chinese}</p>
                           </div>
+                      </div>
+                  ) : (
+                      <div className="text-center py-8 text-slate-400">
+                          <p>生成似乎遇到了一点问题，可能是网络连接或服务繁忙。</p>
                       </div>
                   )}
                   
@@ -131,11 +122,14 @@ export const StudySession: React.FC<StudySessionProps> = ({
            {/* AI Story Button (New) */}
            {completedWordTerms.length > 0 && (
                <button 
-                  onClick={handleGenerateStory}
+                  onClick={() => setShowStoryModal(true)}
                   className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl font-bold text-base shadow-lg shadow-purple-200 dark:shadow-none flex items-center justify-center gap-2 transition-transform active:scale-95 mb-2 relative overflow-hidden group"
                >
                   <div className="absolute inset-0 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                  <span className="relative flex items-center gap-2"><Sparkles size={18} /> 生成 AI 助记故事</span>
+                  <span className="relative flex items-center gap-2">
+                      {isStoryLoading ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
+                      {isStoryLoading ? 'AI 故事生成中...' : '查看 AI 助记故事'}
+                  </span>
                </button>
            )}
 

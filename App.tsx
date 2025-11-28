@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
-import { Word, WordStatus, ViewMode, DictionaryEntry, StudyHistory, StudyMode } from './types';
+import { Word, WordStatus, ViewMode, DictionaryEntry, StudyHistory, StudyMode, ShopItem, UserCoupon } from './types';
 import { INITIAL_WORDS, AUTOCOMPLETE_DICT } from './constants';
 import { Flashcard } from './components/Flashcard';
 import { WordList } from './components/WordList';
@@ -11,13 +10,15 @@ import { SettingsModal } from './components/SettingsModal';
 import { StudySession } from './components/StudySession';
 import { Dashboard } from './components/Dashboard';
 import { CommutePlayer } from './components/CommutePlayer';
-import { enrichWordWithAI, batchEnrichWords } from './services/geminiService';
-import { Book, List, Plus, GraduationCap, AlertCircle, Search, Settings } from 'lucide-react';
+import { ArticleReader } from './components/ArticleReader';
+import { LoveStore } from './components/LoveStore';
+import { enrichWordWithAI, batchEnrichWords, generateStory } from './services/geminiService';
+import { Book, List, Plus, GraduationCap, AlertCircle, Search, Settings, BookOpen, Gift } from 'lucide-react';
 
 const STORAGE_KEY = 'kaoyan_vocab_progress_v1';
 const HISTORY_KEY = 'kaoyan_study_history_v1';
 const SESSION_STORAGE_KEY = 'kaoyan_session_state_v1';
-const APP_VERSION = 'v7.1 (Story + Commute + Dark)';
+const APP_VERSION = 'v8.0 (Exam Master)';
 
 const App: React.FC = () => {
   // --- Data State ---
@@ -33,6 +34,38 @@ const App: React.FC = () => {
       const saved = localStorage.getItem(HISTORY_KEY);
       return saved ? JSON.parse(saved) : {};
     } catch (e) { return {}; }
+  });
+
+  // --- Love Store State ---
+  const [points, setPoints] = useState<number>(() => {
+      return Number(localStorage.getItem('kaoyan_points') || 0);
+  });
+  
+  const [inventory, setInventory] = useState<UserCoupon[]>(() => {
+      try {
+          return JSON.parse(localStorage.getItem('kaoyan_inventory') || '[]');
+      } catch { return []; }
+  });
+
+  const DEFAULT_SHOP_ITEMS: ShopItem[] = [
+      { id: 'item-1', name: '奶茶券', cost: 50, description: '请喝一杯喜欢的奶茶 (无视排队)', icon: '🧋', isCustom: false },
+      { id: 'item-2', name: '跑腿卡', cost: 30, description: '代取快递 / 或是去食堂买饭带回宿舍', icon: '🏃', isCustom: false },
+      { id: 'item-3', name: '专属按摩', cost: 100, description: '自习累了？肩颈/手部按摩 20分钟', icon: '💆', isCustom: false },
+      { id: 'item-4', name: '早起占座', cost: 60, description: '图书馆/自习室帮忙占个好位置', icon: '📚', isCustom: false },
+      { id: 'item-5', name: '操场散步', cost: 50, description: '放下手机，陪你在操场散步/夜聊一小时', icon: '🌙', isCustom: false },
+      { id: 'item-6', name: '剥虾/水果', cost: 40, description: '吃饭时我不动手，只张嘴', icon: '🍤', isCustom: false },
+      { id: 'item-7', name: '游戏带飞', cost: 150, description: '陪玩不坑，或者把把C', icon: '🎮', isCustom: false },
+      { id: 'item-8', name: '朋友圈特权', cost: 300, description: '发一条指定内容的朋友圈 (秀恩爱专用)', icon: '📸', isCustom: false },
+      { id: 'item-9', name: '停止冷战', cost: 600, description: '无论谁错，立刻和好，不许翻旧账', icon: '🏳️', isCustom: false },
+      { id: 'item-10', name: '绝对服从券', cost: 800, description: '在合理范围内，无条件听从一个指令', icon: '👑', isCustom: false },
+      { id: 'item-11', name: '神秘礼物', cost: 1000, description: '兑换一个实体小礼物 (口红/模型/周边)', icon: '🎁', isCustom: false },
+  ];
+
+  const [shopItems, setShopItems] = useState<ShopItem[]>(() => {
+      try {
+          const saved = JSON.parse(localStorage.getItem('kaoyan_shop_items') || '[]');
+          return saved.length > 0 ? saved : DEFAULT_SHOP_ITEMS;
+      } catch { return DEFAULT_SHOP_ITEMS; }
   });
 
   // --- UI State ---
@@ -72,6 +105,10 @@ const App: React.FC = () => {
   const [sessionStats, setSessionStats] = useState<Record<string, number>>(initialSessionState?.sessionStats || {});
   const [studyMode, setStudyMode] = useState<StudyMode>(initialSessionState?.studyMode || 'flashcard');
 
+  // --- Story Generation State ---
+  const [preloadedStory, setPreloadedStory] = useState<{english: string, chinese: string} | null>(null);
+  const [isStoryLoading, setIsStoryLoading] = useState(false);
+
   // --- Derived State ---
   const globalStudyQueue = words
     .filter(w => w.nextReview <= now)
@@ -84,10 +121,12 @@ const App: React.FC = () => {
   const currentWordId = isSessionActive && sessionQueue.length > 0 ? sessionQueue[0] : null;
   const currentWord = currentWordId ? words.find(w => w.id === currentWordId) : null;
   
-  // Safety Check
+  // Safety Check & Session Finish Logic
   useEffect(() => {
     if (isSessionActive && sessionQueue.length === 0 && !hasFinishedSession) {
         setHasFinishedSession(true);
+        // Bonus for finishing session
+        setPoints(p => p + 50);
     }
   }, [isSessionActive, sessionQueue.length, hasFinishedSession]);
 
@@ -115,6 +154,11 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(studyHistory));
   }, [studyHistory]);
+
+  // --- Love Store Effects ---
+  useEffect(() => { localStorage.setItem('kaoyan_points', points.toString()); }, [points]);
+  useEffect(() => { localStorage.setItem('kaoyan_inventory', JSON.stringify(inventory)); }, [inventory]);
+  useEffect(() => { localStorage.setItem('kaoyan_shop_items', JSON.stringify(shopItems)); }, [shopItems]);
 
   useEffect(() => {
       const sessionState = {
@@ -172,6 +216,24 @@ const App: React.FC = () => {
       setSessionLearningStreaks({}); 
       setIsSessionActive(true);
       setHasFinishedSession(false);
+
+      // --- Background Story Generation ---
+      const terms = queueIds.map(id => words.find(w => w.id === id)?.term).filter(Boolean) as string[];
+      if (terms.length > 0) {
+          setIsStoryLoading(true);
+          setPreloadedStory(null);
+          generateStory(terms)
+            .then(story => {
+                setPreloadedStory(story);
+            })
+            .catch(err => {
+                console.warn("Background story generation failed", err);
+                setPreloadedStory(null);
+            })
+            .finally(() => {
+                setIsStoryLoading(false);
+            });
+      }
   };
 
   const handleExitSession = () => {
@@ -180,11 +242,59 @@ const App: React.FC = () => {
       setSessionStats({});
       setSessionLearningStreaks({});
       setHasFinishedSession(false);
+      setPreloadedStory(null);
+      setIsStoryLoading(false);
+  };
+
+  // --- Love Store Handlers ---
+  const handlePurchase = (item: ShopItem) => {
+      if (points >= item.cost) {
+          if (confirm(`确定花费 ${item.cost} 积分兑换 "${item.name}" 吗？`)) {
+              setPoints(prev => prev - item.cost);
+              const newCoupon: UserCoupon = {
+                  id: `coupon-${Date.now()}`,
+                  itemId: item.id,
+                  name: item.name,
+                  description: item.description,
+                  icon: item.icon,
+                  purchasedAt: Date.now(),
+                  isUsed: false
+              };
+              setInventory(prev => [newCoupon, ...prev]);
+          }
+      }
+  };
+
+  const handleUseCoupon = (id: string) => {
+      if (confirm("确定要现在使用这张券吗？(使用后将变为核销状态)")) {
+          setInventory(prev => prev.map(c => c.id === id ? { ...c, isUsed: true, usedAt: Date.now() } : c));
+      }
+  };
+
+  const handleAddCustomItem = (name: string, cost: number, desc: string) => {
+      const newItem: ShopItem = {
+          id: `custom-${Date.now()}`,
+          name,
+          cost,
+          description: desc,
+          icon: '💖',
+          isCustom: true
+      };
+      setShopItems(prev => [newItem, ...prev]);
+  };
+
+  const handleDeleteCustomItem = (id: string) => {
+      setShopItems(prev => prev.filter(i => i.id !== id));
   };
 
   const handleStatusChange = useCallback((id: string, actionStatus: WordStatus) => {
     updateHistory();
     setSessionStats(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
+
+    // Award Points on Mastery
+    if (actionStatus === WordStatus.Mastered) {
+        setPoints(p => p + 10);
+    }
 
     setWords(prev => prev.map(w => {
       if (w.id !== id) return w;
@@ -314,8 +424,6 @@ const App: React.FC = () => {
   const progressPercent = sessionInitialCount > 0 ? (masteredCount / sessionInitialCount) * 100 : 0;
   const struggleCount = Object.keys(sessionLearningStreaks).length;
   const directCount = Math.max(0, sessionInitialCount - struggleCount);
-  
-  // Get terms for story generation (just finished batch)
   const lastSessionWords = lastSessionIds.map(id => words.find(w => w.id === id)?.term).filter(Boolean) as string[];
 
   const [showSetup, setShowSetup] = useState(false);
@@ -324,7 +432,6 @@ const App: React.FC = () => {
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-black text-slate-900 dark:text-slate-100 relative selection:bg-indigo-100 selection:text-indigo-700 font-sans transition-colors">
       {commutePlaylist && <CommutePlayer playlist={commutePlaylist} onClose={() => setCommutePlaylist(null)} />}
-      
       {showInstallGuide && <InstallGuide onClose={() => setShowInstallGuide(false)} isIOS={isIOS} />}
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} currentWords={words} onRestoreData={(d) => setWords(d)} onClearData={handleClearData} appVersion={APP_VERSION} />}
 
@@ -377,7 +484,9 @@ const App: React.FC = () => {
                         onReviewAgain={() => handleStartSession(lastSessionIds, true)}
                         studyMode={studyMode}
                         setStudyMode={setStudyMode}
-                        completedWordTerms={lastSessionWords} // Pass words for story
+                        completedWordTerms={lastSessionWords}
+                        preloadedStory={preloadedStory} 
+                        isStoryLoading={isStoryLoading} 
                     />
                  ) : currentWord ? (
                     <div className="w-full h-full flex flex-col items-center justify-center">
@@ -420,6 +529,12 @@ const App: React.FC = () => {
              )
           )}
 
+          {mode === 'reader' && (
+              <div className="h-full bg-white/60 dark:bg-slate-900/60 backdrop-blur-md rounded-3xl shadow-sm border border-white/50 dark:border-slate-800 overflow-hidden">
+                  <ArticleReader words={words} onLookup={handleLookup} />
+              </div>
+          )}
+
           {mode === 'list' && (
             <div className="h-full bg-white/60 dark:bg-slate-900/60 backdrop-blur-md rounded-3xl shadow-sm border border-white/50 dark:border-slate-800 overflow-hidden">
               <WordList 
@@ -442,6 +557,20 @@ const App: React.FC = () => {
             </div>
           )}
 
+          {mode === 'store' && (
+              <div className="h-full bg-white/60 dark:bg-slate-900/60 backdrop-blur-md rounded-3xl shadow-sm border border-white/50 dark:border-slate-800 overflow-hidden">
+                  <LoveStore 
+                    points={points}
+                    shopItems={shopItems}
+                    inventory={inventory}
+                    onPurchase={handlePurchase}
+                    onUseCoupon={handleUseCoupon}
+                    onAddCustomItem={handleAddCustomItem}
+                    onDeleteCustomItem={handleDeleteCustomItem}
+                  />
+              </div>
+          )}
+
           {mode === 'dictionary' && lookupTerm && (
             <DictionaryDetail term={lookupTerm} existingWord={words.find(w => w.term.toLowerCase() === lookupTerm.toLowerCase())} onAdd={handleAddToVocabulary} onRemove={handleDelete} onBack={() => { setMode('list'); setLookupTerm(null); }} />
           )}
@@ -452,9 +581,13 @@ const App: React.FC = () => {
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5 p-1.5 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-white/50 dark:border-slate-800 shadow-2xl shadow-indigo-500/10 dark:shadow-none rounded-2xl ring-1 ring-white/50 dark:ring-slate-800 animate-in slide-in-from-bottom-6">
             <button onClick={() => {setMode('study'); setShowSetup(false);}} className={`flex items-center gap-2 px-4 py-3 rounded-xl transition-all font-bold text-sm ${mode === 'study' ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-lg' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}><Book size={18} strokeWidth={2.5} /><span className={mode === 'study' ? 'block' : 'hidden'}>Study</span></button>
             <div className="w-px h-6 bg-slate-200 dark:bg-slate-800 mx-1"></div>
+            <button onClick={() => setMode('reader')} className={`flex items-center gap-2 px-4 py-3 rounded-xl transition-all font-bold text-sm ${mode === 'reader' ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-lg' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}><BookOpen size={18} strokeWidth={2.5} /><span className={mode === 'reader' ? 'block' : 'hidden'}>Reader</span></button>
+            <div className="w-px h-6 bg-slate-200 dark:bg-slate-800 mx-1"></div>
             <button onClick={() => setMode('import')} className={`p-3 rounded-xl transition-all ${mode === 'import' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none rotate-90' : 'text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30'}`}><Plus size={22} strokeWidth={3} /></button>
             <div className="w-px h-6 bg-slate-200 dark:bg-slate-800 mx-1"></div>
             <button onClick={() => setMode('list')} className={`flex items-center gap-2 px-4 py-3 rounded-xl transition-all font-bold text-sm ${mode === 'list' ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-lg' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}><List size={18} strokeWidth={2.5} /><span className={mode === 'list' ? 'block' : 'hidden'}>List</span></button>
+            <div className="w-px h-6 bg-slate-200 dark:bg-slate-800 mx-1"></div>
+            <button onClick={() => setMode('store')} className={`flex items-center gap-2 px-4 py-3 rounded-xl transition-all font-bold text-sm ${mode === 'store' ? 'bg-pink-500 text-white shadow-lg' : 'text-slate-400 hover:bg-pink-50 dark:hover:bg-pink-900/20 hover:text-pink-500'}`}><Gift size={18} strokeWidth={2.5} /><span className={mode === 'store' ? 'block' : 'hidden'}>Store</span></button>
         </div>
       )}
     </div>

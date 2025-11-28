@@ -23,6 +23,7 @@ export interface Word {
   interval: number;   // Current interval in days
   repetitions: number; // Number of consecutive successful recalls
   easeFactor: number; // SM-2 Ease Factor (starts at 2.5)
+  lastReviewed?: number;
 }
 
 export enum WordStatus {
@@ -45,9 +46,64 @@ export interface DictionaryEntry {
   definition: string;
 }
 
-export type ViewMode = 'study' | 'list' | 'import' | 'dictionary';
+export type ViewMode = 'study' | 'list' | 'import' | 'dictionary' | 'reader' | 'store';
 
 // New: For Dashboard Heatmap
 export type StudyHistory = Record<string, number>; // "YYYY-MM-DD": count
 
 export type StudyMode = 'flashcard' | 'spelling';
+
+// --- New Features Interfaces ---
+
+export interface ConfusionItem {
+  term: string;
+  definition: string;
+  difference: string; // Key difference/nuance
+  example: string;
+}
+
+export interface ComparatorResult {
+  target: string;
+  confusingWords: ConfusionItem[];
+  summary: string;
+}
+
+export interface EtymologyPart {
+  part: string;
+  meaning: string;
+  type: 'prefix' | 'root' | 'suffix';
+}
+
+export interface CognateItem {
+  term: string;
+  definition: string;
+}
+
+export interface EtymologyResult {
+  root: string;
+  rootMeaning: string;
+  breakdown: EtymologyPart[];
+  cognates: CognateItem[]; // List of related words with definitions
+}
+
+// --- Love Store Interfaces ---
+
+export interface ShopItem {
+  id: string;
+  name: string;
+  cost: number;
+  description: string;
+  icon: string; // Emoji
+  isCustom?: boolean;
+}
+
+export interface UserCoupon {
+  id: string; // Unique instance ID
+  itemId: string;
+  name: string;
+  description: string;
+  icon: string;
+  purchasedAt: number;
+  isUsed: boolean;
+  usedAt?: number;
+}
