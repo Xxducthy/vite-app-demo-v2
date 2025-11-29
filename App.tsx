@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { Word, WordStatus, ViewMode, DictionaryEntry, StudyHistory, StudyMode, ShopItem, UserCoupon } from './types';
+import { Word, WordStatus, ViewMode, DictionaryEntry, StudyHistory, StudyMode, ShopItem, UserCoupon, ComparatorResult, EtymologyResult } from './types';
 import { INITIAL_WORDS, AUTOCOMPLETE_DICT } from './constants';
 import { Flashcard } from './components/Flashcard';
 import { WordList } from './components/WordList';
@@ -11,13 +12,13 @@ import { StudySession } from './components/StudySession';
 import { Dashboard } from './components/Dashboard';
 import { CommutePlayer } from './components/CommutePlayer';
 import { LoveStore } from './components/LoveStore';
-import { enrichWordWithAI, batchEnrichWords, generateStory } from './services/geminiService';
+import { enrichWordWithAI, batchEnrichWords, generateStory, analyzeConfusion, analyzeEtymology } from './services/geminiService';
 import { Book, List, Plus, GraduationCap, AlertCircle, Search, Settings, BookOpen, Gift } from 'lucide-react';
 
 const STORAGE_KEY = 'kaoyan_vocab_progress_v1';
 const HISTORY_KEY = 'kaoyan_study_history_v1';
 const SESSION_STORAGE_KEY = 'kaoyan_session_state_v1';
-const APP_VERSION = 'v8.1 (Exam Master)';
+const APP_VERSION = 'v8.2 (Speed)';
 
 const App: React.FC = () => {
   // --- Data State ---
@@ -57,6 +58,10 @@ const App: React.FC = () => {
       { id: 'item-14', name: '专属点歌', cost: 60, description: '想听什么你来唱，不许拒绝', icon: '🎤', isCustom: false },
       { id: 'item-15', name: '吹头发', cost: 80, description: '洗完澡帮我吹干头发，享受服务', icon: '💇‍♀️', isCustom: false },
       { id: 'item-3', name: '专属按摩', cost: 100, description: '自习累了？肩颈/手部按摩 20分钟', icon: '💆', isCustom: false },
+      { id: 'item-18', name: '一起探店', cost: 150, description: '去一家收藏已久的网红店打卡吃好吃的', icon: '🍜', isCustom: false },
+      { id: 'item-19', name: '穿情侣装', cost: 200, description: '陪我穿一天情侣装，宣示主权', icon: '👕', isCustom: false },
+      { id: 'item-20', name: '手写情书', cost: 250, description: '认认真真给我写一封不少于500字的情书', icon: '💌', isCustom: false },
+      { id: 'item-21', name: '通宵电影', cost: 300, description: '买好多零食，窝在一起通宵看电影/刷剧', icon: '🎬', isCustom: false },
       { id: 'item-16', name: '恐怖片护体', cost: 120, description: '陪看恐怖片，提供全程遮挡和抱抱服务', icon: '👻', isCustom: false },
       { id: 'item-7', name: '游戏带飞', cost: 150, description: '陪玩不坑，或者把把C', icon: '🎮', isCustom: false },
       { id: 'item-17', name: '专属摄影师', cost: 200, description: '出门游玩负责拍照，拍到满意为止', icon: '📸', isCustom: false },
@@ -64,6 +69,7 @@ const App: React.FC = () => {
       { id: 'item-9', name: '停止冷战', cost: 600, description: '无论谁错，立刻和好，不许翻旧账', icon: '🏳️', isCustom: false },
       { id: 'item-10', name: '绝对服从券', cost: 800, description: '在合理范围内，无条件听从一个指令', icon: '👑', isCustom: false },
       { id: 'item-11', name: '神秘礼物', cost: 1000, description: '兑换一个实体小礼物 (口红/模型/周边)', icon: '🎁', isCustom: false },
+      { id: 'item-22', name: '周末周边游', cost: 1500, description: '规划一次周末短途旅行，去附近的城市玩', icon: '🚄', isCustom: false },
   ];
 
   const [shopItems, setShopItems] = useState<ShopItem[]>(() => {
@@ -113,6 +119,9 @@ const App: React.FC = () => {
   // --- Story Generation State ---
   const [preloadedStory, setPreloadedStory] = useState<{english: string, chinese: string} | null>(null);
   const [isStoryLoading, setIsStoryLoading] = useState(false);
+
+  // --- Preloaded Extra Data (Etymology/Comparator) ---
+  const [preloadedExtraData, setPreloadedExtraData] = useState<Record<string, { etymology?: EtymologyResult, comparator?: ComparatorResult }>>({});
 
   // --- Derived State ---
   const globalStudyQueue = words
@@ -222,9 +231,10 @@ const App: React.FC = () => {
       setIsSessionActive(true);
       setHasFinishedSession(false);
 
-      // --- Background Story Generation ---
+      // --- Background Generation (Story & Pre-fetching) ---
       const terms = queueIds.map(id => words.find(w => w.id === id)?.term).filter(Boolean) as string[];
       if (terms.length > 0) {
+          // 1. Start Story Generation
           setIsStoryLoading(true);
           setPreloadedStory(null);
           generateStory(terms)
@@ -238,6 +248,26 @@ const App: React.FC = () => {
             .finally(() => {
                 setIsStoryLoading(false);
             });
+          
+          // 2. Start Advanced Data Pre-fetching
+          setPreloadedExtraData({}); // Clear old cache
+          terms.forEach(term => {
+              // Etymology
+              analyzeEtymology(term).then(res => {
+                  setPreloadedExtraData(prev => ({
+                      ...prev,
+                      [term]: { ...prev[term], etymology: res }
+                  }));
+              }).catch(() => {});
+
+              // Confusion
+              analyzeConfusion(term).then(res => {
+                  setPreloadedExtraData(prev => ({
+                      ...prev,
+                      [term]: { ...prev[term], comparator: res }
+                  }));
+              }).catch(() => {});
+          });
       }
   };
 
@@ -249,6 +279,7 @@ const App: React.FC = () => {
       setHasFinishedSession(false);
       setPreloadedStory(null);
       setIsStoryLoading(false);
+      setPreloadedExtraData({});
   };
 
   // --- Love Store Handlers ---
@@ -436,6 +467,10 @@ const App: React.FC = () => {
   const [showSetup, setShowSetup] = useState(false);
   const finalHandleExit = () => { handleExitSession(); setShowSetup(false); };
 
+  // Prepare data for current card
+  const currentWordTerm = currentWord?.term;
+  const currentExtraData = currentWordTerm ? preloadedExtraData[currentWordTerm] : undefined;
+
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-black text-slate-900 dark:text-slate-100 relative selection:bg-indigo-100 selection:text-indigo-700 font-sans transition-colors">
       {commutePlaylist && <CommutePlayer playlist={commutePlaylist} onClose={() => setCommutePlaylist(null)} />}
@@ -505,6 +540,7 @@ const App: React.FC = () => {
                             onStatusChange={handleStatusChange} 
                             onNext={handleNext} 
                             mode={studyMode}
+                            extraData={currentExtraData}
                         />
                         <div className="w-full max-w-xs mt-6 animate-in fade-in slide-in-from-bottom-4">
                             <div className="flex justify-between items-end mb-1.5 px-1">

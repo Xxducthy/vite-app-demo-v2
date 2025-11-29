@@ -1,7 +1,39 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Play, CheckCircle2, Coffee, ArrowRight, Layers, Shuffle, RotateCcw, Dumbbell, Zap, AlertTriangle, PenTool, BookOpen, Sparkles, X, Loader2 } from 'lucide-react';
-import { StudyMode } from '../types';
+import { StudyMode, ComparatorResult, EtymologyResult } from '../types';
+import { AUTOCOMPLETE_DICT } from '../constants';
+
+// Helper for clickable story words
+const StoryWord: React.FC<{ text: string }> = ({ text }) => {
+    const [showTip, setShowTip] = useState(false);
+    // Clean punctuation
+    const rawWord = text.replace(/[^a-zA-Z-]/g, '').toLowerCase();
+    const match = AUTOCOMPLETE_DICT.find(d => d.term.toLowerCase() === rawWord);
+    
+    // Check if it's a bolded/highlighted keyword (passed as **word**)
+    const isHighlight = text.startsWith('**');
+    const display = text.replace(/\*\*/g, '');
+
+    return (
+        <span className="relative inline-block mx-0.5">
+            <span 
+                onClick={(e) => { e.stopPropagation(); if(match) setShowTip(!showTip); }}
+                className={`cursor-pointer transition-colors ${isHighlight ? 'text-purple-600 dark:text-purple-400 font-bold bg-purple-50 dark:bg-purple-900/30 px-1 rounded' : match ? 'hover:text-purple-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded px-0.5' : ''}`}
+            >
+                {display}
+            </span>
+            {showTip && match && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-slate-900 text-white text-xs p-2 rounded-lg shadow-xl z-50 whitespace-nowrap min-w-[100px]">
+                    <div className="font-bold mb-0.5">{match.term} <span className="text-slate-400 font-normal">{match.pos}</span></div>
+                    <div>{match.definition}</div>
+                    {/* Triangle */}
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-900"></div>
+                </div>
+            )}
+        </span>
+    );
+};
 
 interface StudySessionProps {
   totalDue: number;
@@ -19,6 +51,7 @@ interface StudySessionProps {
   completedWordTerms?: string[];
   preloadedStory?: {english: string, chinese: string} | null;
   isStoryLoading?: boolean;
+  currentWordExtraData?: { comparator?: ComparatorResult, etymology?: EtymologyResult };
 }
 
 export const StudySession: React.FC<StudySessionProps> = ({ 
@@ -40,6 +73,23 @@ export const StudySession: React.FC<StudySessionProps> = ({
 }) => {
   const [showStoryModal, setShowStoryModal] = useState(false);
 
+  // Parse English Story to make it clickable
+  const renderInteractiveEnglish = (text: string) => {
+      // Split by spaces but keep structure
+      return text.split(' ').map((chunk, i) => <StoryWord key={i} text={chunk} />);
+  };
+
+  // Parse Chinese Story for highlighting (replace **text** with styled span, NO QUOTES)
+  const renderHighlightedChinese = (text: string) => {
+      const parts = text.split(/(\*\*.*?\*\*)/g);
+      return parts.map((part, i) => {
+          if (part.startsWith('**') && part.endsWith('**')) {
+              return <span key={i} className="text-purple-600 dark:text-purple-400 font-bold mx-0.5">{part.slice(2, -2)}</span>;
+          }
+          return part;
+      });
+  };
+
   // --- STORY MODAL ---
   if (showStoryModal) {
       return (
@@ -55,7 +105,7 @@ export const StudySession: React.FC<StudySessionProps> = ({
                       </div>
                       <div>
                           <h2 className="text-xl font-black text-slate-800 dark:text-white">AI 助记故事</h2>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">根据刚背过的 {completedWordTerms.length} 个单词生成</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">点击单词可查看释义</p>
                       </div>
                   </div>
 
@@ -67,11 +117,16 @@ export const StudySession: React.FC<StudySessionProps> = ({
                   ) : preloadedStory ? (
                       <div className="space-y-6">
                           <div className="prose prose-slate dark:prose-invert">
-                              <p className="text-lg leading-relaxed font-serif text-slate-800 dark:text-slate-100" dangerouslySetInnerHTML={{ __html: preloadedStory.english.replace(/\*\*(.*?)\*\*/g, '<span class="text-purple-600 dark:text-purple-400 font-bold bg-purple-50 dark:bg-purple-900/30 px-1 rounded">$1</span>') }}></p>
+                              {/* Interactive English */}
+                              <p className="text-lg leading-relaxed font-serif text-slate-800 dark:text-slate-100 text-justify">
+                                  {renderInteractiveEnglish(preloadedStory.english)}
+                              </p>
                           </div>
                           <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
                               <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">中文大意</h4>
-                              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{preloadedStory.chinese}</p>
+                              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                                  {renderHighlightedChinese(preloadedStory.chinese)}
+                              </p>
                           </div>
                       </div>
                   ) : (

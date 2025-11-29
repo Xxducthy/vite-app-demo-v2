@@ -7,19 +7,22 @@ import { X, Loader2, GitCompare, AlertTriangle, ArrowRight } from 'lucide-react'
 interface ComparatorModalProps {
   term: string;
   onClose: () => void;
+  preloadedData?: ComparatorResult | null;
 }
 
-export const ComparatorModal: React.FC<ComparatorModalProps> = ({ term, onClose }) => {
-  const [data, setData] = useState<ComparatorResult | null>(null);
-  const [loading, setLoading] = useState(true);
+export const ComparatorModal: React.FC<ComparatorModalProps> = ({ term, onClose, preloadedData }) => {
+  const [data, setData] = useState<ComparatorResult | null>(preloadedData || null);
+  const [loading, setLoading] = useState(!preloadedData);
   const [error, setError] = useState(false);
 
   useEffect(() => {
+    if (preloadedData) return; // Skip if we have data
+    
     analyzeConfusion(term)
       .then(setData)
       .catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, [term]);
+  }, [term, preloadedData]);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 animate-in fade-in">

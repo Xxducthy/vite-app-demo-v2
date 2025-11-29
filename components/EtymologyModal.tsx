@@ -7,19 +7,22 @@ import { X, Loader2, Network, Sprout, ArrowRight } from 'lucide-react';
 interface EtymologyModalProps {
   term: string;
   onClose: () => void;
+  preloadedData?: EtymologyResult | null;
 }
 
-export const EtymologyModal: React.FC<EtymologyModalProps> = ({ term, onClose }) => {
-  const [data, setData] = useState<EtymologyResult | null>(null);
-  const [loading, setLoading] = useState(true);
+export const EtymologyModal: React.FC<EtymologyModalProps> = ({ term, onClose, preloadedData }) => {
+  const [data, setData] = useState<EtymologyResult | null>(preloadedData || null);
+  const [loading, setLoading] = useState(!preloadedData);
   const [error, setError] = useState(false);
 
   useEffect(() => {
+    if (preloadedData) return; // Skip if we have data
+
     analyzeEtymology(term)
       .then(setData)
       .catch(() => setError(true))
       .finally(() => setLoading(false));
-  }, [term]);
+  }, [term, preloadedData]);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 animate-in fade-in">

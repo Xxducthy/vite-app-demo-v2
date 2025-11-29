@@ -187,9 +187,10 @@ export const generateStory = async (words: string[]): Promise<{english: string, 
   const systemPrompt = `You are a helpful English teacher. 
 Task: Write a short, coherent, and slightly funny story (max 120 words) using ALL the following words: ${words.join(', ')}.
 Requirements:
-1. Highlight the keywords in the English story using **bold** markdown (e.g., **apple**).
-2. Provide a Chinese translation below it.
-3. Return JSON format only: { "english": "...", "chinese": "..." }`;
+1. English: Highlight the keywords using **bold** markdown.
+2. Chinese: Provide a translation. **ALSO highlight the corresponding Chinese keywords using **bold** markdown**.
+3. CRITICAL: Do NOT add quotation marks (" ") around the highlighted words in Chinese. Just bold them.
+4. Return JSON format only: { "english": "...", "chinese": "..." }`;
 
   try {
       const response = await fetch(API_URL, {

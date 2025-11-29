@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Word, WordStatus, StudyMode } from '../types';
+import { Word, WordStatus, StudyMode, ComparatorResult, EtymologyResult } from '../types';
 import { Volume2, Check, X, Repeat, Lightbulb, RefreshCw, Trophy, ArrowRight, Eye, CheckCircle2, GitCompare, Sprout, Activity } from 'lucide-react';
 import { ComparatorModal } from './ComparatorModal';
 import { EtymologyModal } from './EtymologyModal';
@@ -13,9 +13,10 @@ interface FlashcardProps {
   sessionAttempts: number; 
   learningStreak?: number;
   mode: StudyMode;
+  extraData?: { comparator?: ComparatorResult, etymology?: EtymologyResult };
 }
 
-export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNext, sessionAttempts, learningStreak, mode }) => {
+export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNext, sessionAttempts, learningStreak, mode, extraData }) => {
   const [isFlipped, setIsFlipped] = useState(false);
   const [touchStart, setTouchStart] = useState<{x: number, y: number} | null>(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
@@ -72,7 +73,6 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
   );
 
   if (mode === 'spelling') {
-      // ... (Spelling mode rendering remains same)
       const maskedMeanings = word.meanings.map(m => ({ ...m, example: m.example.replace(new RegExp(word.term, 'gi'), '_____') }));
       return (
           <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-xl dark:shadow-none border border-slate-100 dark:border-slate-800 flex flex-col overflow-hidden relative min-h-[500px]">
@@ -97,8 +97,8 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
   // --- FLASHCARD MODE ---
   return (
     <>
-    {showComparator && <ComparatorModal term={word.term} onClose={() => setShowComparator(false)} />}
-    {showEtymology && <EtymologyModal term={word.term} onClose={() => setShowEtymology(false)} />}
+    {showComparator && <ComparatorModal term={word.term} onClose={() => setShowComparator(false)} preloadedData={extraData?.comparator} />}
+    {showEtymology && <EtymologyModal term={word.term} onClose={() => setShowEtymology(false)} preloadedData={extraData?.etymology} />}
     
     {/* Stats Modal */}
     {showStats && (
