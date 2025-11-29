@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Word, WordStatus, ViewMode, DictionaryEntry, StudyHistory, StudyMode, ShopItem, UserCoupon, ComparatorResult, EtymologyResult } from './types';
 import { INITIAL_WORDS, AUTOCOMPLETE_DICT } from './constants';
@@ -18,7 +17,7 @@ import { Book, List, Plus, GraduationCap, AlertCircle, Search, Settings, BookOpe
 const STORAGE_KEY = 'kaoyan_vocab_progress_v1';
 const HISTORY_KEY = 'kaoyan_study_history_v1';
 const SESSION_STORAGE_KEY = 'kaoyan_session_state_v1';
-const APP_VERSION = 'v8.6 (Scroll Fix)';
+const APP_VERSION = 'v8.5 (Love Store Update)';
 
 const App: React.FC = () => {
   // --- Data State ---

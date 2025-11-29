@@ -73,10 +73,9 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
       const deltaX = currentX - touchStart.x; 
       const deltaY = currentY - touchStart.y;
 
-      // Improved Vertical scroll detection:
-      // If moving mostly vertically (bias 1.2x), let browser handle scroll.
-      // This prevents accidental swipes when trying to scroll down text.
-      if (Math.abs(deltaY) * 1.2 > Math.abs(deltaX)) {
+      // FIX: Vertical scroll detection. 
+      // If user moves vertically more than horizontally, assume scrolling and ignore swipe.
+      if (Math.abs(deltaY) > Math.abs(deltaX)) {
           return;
       }
 
@@ -96,10 +95,10 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
   if (mode === 'spelling') {
       const maskedMeanings = word.meanings.map(m => ({ ...m, example: m.example.replace(new RegExp(word.term, 'gi'), '_____') }));
       return (
-          <div className="w-full h-full md:h-auto md:aspect-[16/10] max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-xl dark:shadow-none border border-slate-100 dark:border-slate-800 flex flex-col overflow-hidden relative min-h-[500px]">
+          <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-xl dark:shadow-none border border-slate-100 dark:border-slate-800 flex flex-col overflow-hidden relative min-h-[500px]">
               <StatusBadge />
               <div className="absolute top-6 right-6 z-20"><span className="text-[10px] font-bold uppercase text-slate-400 bg-slate-50 dark:bg-slate-800 px-2.5 py-1 rounded-full border border-slate-100 dark:border-slate-700">Spelling</span></div>
-              <div className="p-8 pt-16 flex-grow flex flex-col gap-6 overflow-y-auto">
+              <div className="p-8 pt-16 flex-grow flex flex-col gap-6">
                   <div className="flex justify-center"><button onClick={() => speakText(word.term)} className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/30 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 hover:scale-105 transition-all shadow-sm"><Volume2 size={32} /></button></div>
                   <div className="space-y-4">{maskedMeanings.slice(0, 2).map((m, idx) => (<div key={idx} className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700"><div className="flex items-baseline gap-2 mb-2"><span className="text-xs font-bold text-indigo-500 dark:text-indigo-400 bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-800">{m.partOfSpeech}</span><span className="font-bold text-slate-700 dark:text-slate-200">{m.definition}</span></div><p className="text-sm text-slate-500 dark:text-slate-400 italic font-serif">"{m.example}"</p></div>))}</div>
               </div>
@@ -131,23 +130,11 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
         </div>
     )}
 
-    {/* Changed from fixed aspect ratio to h-full for mobile to prevent layout clipping */}
-    <div className="w-full h-full md:h-auto md:aspect-[16/10] max-w-lg relative cursor-pointer group perspective-1000">
+    <div className="w-full max-w-lg aspect-[3/4] md:aspect-[16/10] relative cursor-pointer group perspective-1000">
       <div className={`absolute top-1/2 left-0 -translate-y-1/2 -translate-x-full z-0 transition-opacity duration-300 ${swipeOffset > 50 ? 'opacity-100' : 'opacity-0'}`}><div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shadow-sm"><Check size={24} strokeWidth={3} /></div></div>
       <div className={`absolute top-1/2 right-0 -translate-y-1/2 translate-x-full z-0 transition-opacity duration-300 ${swipeOffset < -50 ? 'opacity-100' : 'opacity-0'}`}><div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 shadow-sm"><X size={24} strokeWidth={3} /></div></div>
 
-      <div 
-        className="w-full h-full transition-transform duration-300 ease-out" 
-        style={{ 
-            transform: `translate3d(${swipeOffset}px, 0, 0) rotate(${rotateDeg}deg)`, 
-            cursor: swipeOffset !== 0 ? 'grabbing' : 'pointer',
-            touchAction: 'pan-y' // Ensure vertical scroll is handled by browser
-        }} 
-        onTouchStart={handleTouchStart} 
-        onTouchMove={handleTouchMove} 
-        onTouchEnd={handleTouchEnd} 
-        onClick={() => setIsFlipped(!isFlipped)}
-      >
+      <div className="w-full h-full transition-transform duration-300 ease-out" style={{ transform: `translate3d(${swipeOffset}px, 0, 0) rotate(${rotateDeg}deg)`, cursor: swipeOffset !== 0 ? 'grabbing' : 'pointer' }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onClick={() => setIsFlipped(!isFlipped)}>
         <div className="relative w-full h-full transition-transform duration-500 transform-style-3d origin-center" style={{ transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}>
             
             {/* FRONT */}
@@ -183,13 +170,26 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
 
                 <div className="flex-grow overflow-y-auto no-scrollbar p-6 space-y-5 bg-gradient-to-b from-white to-slate-50/30 dark:from-slate-900 dark:to-slate-900/50" style={{ touchAction: 'pan-y' }}>
                     {word.meanings.map((meaning, idx) => (
-                    <div key={idx} className="relative group/item">
-                        <div className="flex items-baseline gap-2 mb-2"><span className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded border border-indigo-100/50 dark:border-indigo-800 font-mono">{meaning.partOfSpeech}</span><p className="text-base font-bold text-slate-800 dark:text-slate-200">{meaning.definition}</p></div>
-                        <div className="pl-3 border-l-2 border-slate-100 dark:border-slate-800 group-hover/item:border-indigo-200 dark:group-hover/item:border-indigo-800 transition-colors"><p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed italic font-serif">"{meaning.example}"</p><div className="flex items-center justify-between mt-1"><p className="text-xs text-slate-400 dark:text-slate-500 font-light">{meaning.translation}</p></div></div>
+                    <div key={idx} className="mb-6 last:mb-0">
+                        {/* Definition Row */}
+                        <div className="flex items-baseline flex-wrap gap-x-2 gap-y-1 mb-2">
+                            <span className="text-xs font-bold text-indigo-500 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-800 font-mono shrink-0">
+                                {meaning.partOfSpeech}
+                            </span>
+                            <span className="text-lg font-bold text-slate-800 dark:text-slate-100 leading-snug">
+                                {meaning.definition}
+                            </span>
+                        </div>
+                        
+                        {/* Example & Translation */}
+                        <div className="text-slate-600 dark:text-slate-400">
+                            <p className="text-base italic font-serif leading-relaxed">"{meaning.example}"</p>
+                            <p className="text-sm mt-1 text-slate-400 dark:text-slate-500">{meaning.translation}</p>
+                        </div>
                     </div>
                     ))}
-                    {word.mnemonic && (<div className="bg-indigo-50/60 dark:bg-indigo-900/20 rounded-xl p-3 border border-indigo-100/60 dark:border-indigo-800"><div className="flex gap-2 items-start"><Lightbulb size={14} className="text-indigo-500 dark:text-indigo-400 mt-0.5 shrink-0" /><p className="text-xs font-medium text-indigo-800/90 dark:text-indigo-300 leading-relaxed">{word.mnemonic}</p></div></div>)}
-                    <div className="h-2"></div>
+                    {word.mnemonic && (<div className="bg-indigo-50/60 dark:bg-indigo-900/20 rounded-xl p-3 border border-indigo-100/60 dark:border-indigo-800 mt-4"><div className="flex gap-2 items-start"><Lightbulb size={14} className="text-indigo-500 dark:text-indigo-400 mt-0.5 shrink-0" /><p className="text-xs font-medium text-indigo-800/90 dark:text-indigo-300 leading-relaxed">{word.mnemonic}</p></div></div>)}
+                    <div className="h-4"></div>
                 </div>
 
                 <div className="px-6 py-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 grid grid-cols-3 gap-3 z-20 shrink-0">
