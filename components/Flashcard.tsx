@@ -73,8 +73,10 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
       const deltaX = currentX - touchStart.x; 
       const deltaY = currentY - touchStart.y;
 
-      // Vertical scroll detection: If moving mostly vertically, let browser handle scroll
-      if (Math.abs(deltaY) > Math.abs(deltaX)) {
+      // Improved Vertical scroll detection:
+      // If moving mostly vertically (bias 1.2x), let browser handle scroll.
+      // This prevents accidental swipes when trying to scroll down text.
+      if (Math.abs(deltaY) * 1.2 > Math.abs(deltaX)) {
           return;
       }
 
@@ -94,10 +96,10 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
   if (mode === 'spelling') {
       const maskedMeanings = word.meanings.map(m => ({ ...m, example: m.example.replace(new RegExp(word.term, 'gi'), '_____') }));
       return (
-          <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-xl dark:shadow-none border border-slate-100 dark:border-slate-800 flex flex-col overflow-hidden relative min-h-[500px]">
+          <div className="w-full h-full md:h-auto md:aspect-[16/10] max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-xl dark:shadow-none border border-slate-100 dark:border-slate-800 flex flex-col overflow-hidden relative min-h-[500px]">
               <StatusBadge />
               <div className="absolute top-6 right-6 z-20"><span className="text-[10px] font-bold uppercase text-slate-400 bg-slate-50 dark:bg-slate-800 px-2.5 py-1 rounded-full border border-slate-100 dark:border-slate-700">Spelling</span></div>
-              <div className="p-8 pt-16 flex-grow flex flex-col gap-6">
+              <div className="p-8 pt-16 flex-grow flex flex-col gap-6 overflow-y-auto">
                   <div className="flex justify-center"><button onClick={() => speakText(word.term)} className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/30 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 hover:scale-105 transition-all shadow-sm"><Volume2 size={32} /></button></div>
                   <div className="space-y-4">{maskedMeanings.slice(0, 2).map((m, idx) => (<div key={idx} className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700"><div className="flex items-baseline gap-2 mb-2"><span className="text-xs font-bold text-indigo-500 dark:text-indigo-400 bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-800">{m.partOfSpeech}</span><span className="font-bold text-slate-700 dark:text-slate-200">{m.definition}</span></div><p className="text-sm text-slate-500 dark:text-slate-400 italic font-serif">"{m.example}"</p></div>))}</div>
               </div>
@@ -129,11 +131,23 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
         </div>
     )}
 
-    <div className="w-full max-w-lg aspect-[3/4] md:aspect-[16/10] relative cursor-pointer group perspective-1000">
+    {/* Changed from fixed aspect ratio to h-full for mobile to prevent layout clipping */}
+    <div className="w-full h-full md:h-auto md:aspect-[16/10] max-w-lg relative cursor-pointer group perspective-1000">
       <div className={`absolute top-1/2 left-0 -translate-y-1/2 -translate-x-full z-0 transition-opacity duration-300 ${swipeOffset > 50 ? 'opacity-100' : 'opacity-0'}`}><div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shadow-sm"><Check size={24} strokeWidth={3} /></div></div>
       <div className={`absolute top-1/2 right-0 -translate-y-1/2 translate-x-full z-0 transition-opacity duration-300 ${swipeOffset < -50 ? 'opacity-100' : 'opacity-0'}`}><div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 shadow-sm"><X size={24} strokeWidth={3} /></div></div>
 
-      <div className="w-full h-full transition-transform duration-300 ease-out" style={{ transform: `translate3d(${swipeOffset}px, 0, 0) rotate(${rotateDeg}deg)`, cursor: swipeOffset !== 0 ? 'grabbing' : 'pointer' }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onClick={() => setIsFlipped(!isFlipped)}>
+      <div 
+        className="w-full h-full transition-transform duration-300 ease-out" 
+        style={{ 
+            transform: `translate3d(${swipeOffset}px, 0, 0) rotate(${rotateDeg}deg)`, 
+            cursor: swipeOffset !== 0 ? 'grabbing' : 'pointer',
+            touchAction: 'pan-y' // Ensure vertical scroll is handled by browser
+        }} 
+        onTouchStart={handleTouchStart} 
+        onTouchMove={handleTouchMove} 
+        onTouchEnd={handleTouchEnd} 
+        onClick={() => setIsFlipped(!isFlipped)}
+      >
         <div className="relative w-full h-full transition-transform duration-500 transform-style-3d origin-center" style={{ transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}>
             
             {/* FRONT */}
@@ -155,7 +169,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
             {/* BACK */}
             <div className="absolute inset-0 w-full h-full backface-hidden bg-white dark:bg-slate-900 rounded-3xl shadow-[0_15px_40px_-10px_rgba(0,0,0,0.08)] dark:shadow-none border border-slate-100 dark:border-slate-800 flex flex-col overflow-hidden transition-colors" style={{ transform: 'rotateY(180deg)' }}>
                 <StatusBadge />
-                <div className="flex justify-between items-center px-6 py-4 pt-16 border-b border-slate-50 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-10">
+                <div className="flex justify-between items-center px-6 py-4 pt-16 border-b border-slate-50 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-10 shrink-0">
                     <div className="flex flex-col"><h3 className="text-xl font-bold text-slate-800 dark:text-white">{word.term}</h3>{word.examSource && (<span className="text-[10px] font-bold text-amber-600/80 dark:text-amber-500 tracking-wide mt-0.5">{word.examSource}</span>)}</div>
                     
                     {/* Quick Action Buttons */}
@@ -178,7 +192,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
                     <div className="h-2"></div>
                 </div>
 
-                <div className="px-6 py-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 grid grid-cols-3 gap-3 z-20">
+                <div className="px-6 py-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 grid grid-cols-3 gap-3 z-20 shrink-0">
                     <button onClick={(e) => { e.stopPropagation(); handleAction(WordStatus.New); }} className="flex flex-col items-center justify-center py-2 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors active:scale-95 group"><X size={20} className="text-rose-300 dark:text-rose-800 group-hover:text-rose-500 dark:group-hover:text-rose-500 mb-1 transition-colors" /><span className="text-[10px] font-bold text-rose-300 dark:text-rose-800 group-hover:text-rose-500 dark:group-hover:text-rose-500 uppercase">Forget</span></button>
                     <button onClick={(e) => { e.stopPropagation(); handleAction(WordStatus.Learning); }} className="flex flex-col items-center justify-center py-2 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors active:scale-95 group"><Repeat size={20} className="text-amber-300 dark:text-amber-800 group-hover:text-amber-500 dark:group-hover:text-amber-500 mb-1 transition-colors" /><span className="text-[10px] font-bold text-amber-300 dark:text-amber-800 group-hover:text-amber-500 dark:group-hover:text-amber-500 uppercase">Blurry</span></button>
                     <button onClick={(e) => { e.stopPropagation(); handleAction(WordStatus.Mastered); }} className="flex flex-col items-center justify-center py-2 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors active:scale-95 group"><Check size={20} className="text-emerald-300 dark:text-emerald-800 group-hover:text-emerald-500 dark:group-hover:text-emerald-500 mb-1 transition-colors" /><span className="text-[10px] font-bold text-emerald-300 dark:text-emerald-800 group-hover:text-emerald-500 dark:group-hover:text-emerald-500 uppercase">Master</span></button>
