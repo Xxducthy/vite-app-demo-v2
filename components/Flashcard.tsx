@@ -60,8 +60,27 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
       else { setSpellingResult('incorrect'); }
   };
 
-  const handleTouchStart = (e: React.TouchEvent) => { if (mode === 'spelling') return; setTouchStart({ x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY }); };
-  const handleTouchMove = (e: React.TouchEvent) => { if (mode === 'spelling' || !touchStart) return; const currentX = e.targetTouches[0].clientX; const deltaX = currentX - touchStart.x; if (Math.abs(deltaX) > 20) setSwipeOffset(deltaX); };
+  const handleTouchStart = (e: React.TouchEvent) => { 
+      if (mode === 'spelling') return; 
+      setTouchStart({ x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY }); 
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => { 
+      if (mode === 'spelling' || !touchStart) return; 
+      
+      const currentX = e.targetTouches[0].clientX; 
+      const currentY = e.targetTouches[0].clientY;
+      const deltaX = currentX - touchStart.x; 
+      const deltaY = currentY - touchStart.y;
+
+      // Vertical scroll detection: If moving mostly vertically, let browser handle scroll
+      if (Math.abs(deltaY) > Math.abs(deltaX)) {
+          return;
+      }
+
+      if (Math.abs(deltaX) > 20) setSwipeOffset(deltaX); 
+  };
+
   const handleTouchEnd = () => { if (!touchStart || mode === 'spelling') return; const threshold = 100; if (swipeOffset > threshold) handleAction(WordStatus.Mastered); else if (swipeOffset < -threshold) handleAction(WordStatus.New); setSwipeOffset(0); setTouchStart(null); };
   const rotateDeg = swipeOffset * 0.05;
 
@@ -148,7 +167,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
                     </div>
                 </div>
 
-                <div className="flex-grow overflow-y-auto no-scrollbar p-6 space-y-5 bg-gradient-to-b from-white to-slate-50/30 dark:from-slate-900 dark:to-slate-900/50">
+                <div className="flex-grow overflow-y-auto no-scrollbar p-6 space-y-5 bg-gradient-to-b from-white to-slate-50/30 dark:from-slate-900 dark:to-slate-900/50" style={{ touchAction: 'pan-y' }}>
                     {word.meanings.map((meaning, idx) => (
                     <div key={idx} className="relative group/item">
                         <div className="flex items-baseline gap-2 mb-2"><span className="text-[10px] font-bold text-indigo-500 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded border border-indigo-100/50 dark:border-indigo-800 font-mono">{meaning.partOfSpeech}</span><p className="text-base font-bold text-slate-800 dark:text-slate-200">{meaning.definition}</p></div>
