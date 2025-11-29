@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Word, WordStatus, StudyMode, ComparatorResult, EtymologyResult } from '../types';
-import { Volume2, Check, X, Repeat, Lightbulb, RefreshCw, Trophy, ArrowRight, Eye, CheckCircle2, GitCompare, Sprout, Activity } from 'lucide-react';
+import { Volume2, Check, X, Repeat, Lightbulb, RefreshCw, Trophy, Activity, GitCompare, Sprout } from 'lucide-react';
 import { ComparatorModal } from './ComparatorModal';
 import { EtymologyModal } from './EtymologyModal';
 import { WordStats } from './WordStats';
@@ -73,9 +73,9 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
       const deltaX = currentX - touchStart.x; 
       const deltaY = currentY - touchStart.y;
 
-      // FIX: Vertical scroll detection. 
-      // If user moves vertically more than horizontally, assume scrolling and ignore swipe.
-      if (Math.abs(deltaY) > Math.abs(deltaX)) {
+      // FIX: Aggressive Vertical scroll detection
+      // If movement is mostly vertical, ignore swipe to allow native scrolling
+      if (Math.abs(deltaY) > Math.abs(deltaX) * 0.8) {
           return;
       }
 
@@ -105,10 +105,8 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
               <div className={`p-6 border-t ${spellingResult === 'correct' ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-100 dark:border-emerald-800' : spellingResult === 'incorrect' ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-100 dark:border-rose-800' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'}`}>
                   <form onSubmit={handleSpellingSubmit} className="relative">
                       <input ref={inputRef} type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="Type the word..." disabled={spellingResult !== null} autoComplete="off" autoCorrect="off" autoCapitalize="off" className={`w-full p-4 text-center text-xl font-bold rounded-xl border-2 outline-none transition-all ${spellingResult === 'correct' ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-white dark:bg-slate-800' : spellingResult === 'incorrect' ? 'border-rose-500 text-rose-600 dark:text-rose-400 bg-white dark:bg-slate-800' : 'border-slate-200 dark:border-slate-700 focus:border-indigo-500 dark:focus:border-indigo-500 text-slate-800 dark:text-white bg-white dark:bg-slate-800'}`} />
-                      {spellingResult === null && inputValue.length > 0 && (<button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"><ArrowRight size={20} /></button>)}
                   </form>
                   {spellingResult === 'incorrect' && (<div className="mt-4 text-center animate-in fade-in slide-in-from-top-2"><p className="text-xs font-bold text-rose-400 uppercase mb-1">Correct Answer</p><p className="text-2xl font-black text-rose-600 dark:text-rose-400 mb-4">{word.term}</p><button onClick={() => handleAction(WordStatus.New)} className="w-full py-3 bg-rose-600 text-white rounded-xl font-bold shadow-lg hover:bg-rose-700 active:scale-95 transition-all">Continue</button></div>)}
-                  {spellingResult === 'correct' && (<div className="mt-4 text-center animate-in fade-in slide-in-from-top-2"><div className="flex items-center justify-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold"><CheckCircle2 size={20} /> Correct!</div></div>)}
               </div>
           </div>
       );
@@ -138,8 +136,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
         <div className="relative w-full h-full transition-transform duration-500 transform-style-3d origin-center" style={{ transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}>
             
             {/* FRONT */}
-            <div className="absolute inset-0 w-full h-full backface-hidden bg-white dark:bg-slate-900 rounded-3xl shadow-[0_15px_40px_-10px_rgba(0,0,0,0.08)] dark:shadow-none border border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center p-8 overflow-hidden z-10 transition-colors">
-                <div className="absolute top-0 left-8 right-8 h-1 bg-gradient-to-r from-indigo-300 via-purple-300 to-pink-300 rounded-b-full opacity-60"></div>
+            <div className="absolute inset-0 w-full h-full backface-hidden bg-white dark:bg-slate-900 rounded-3xl shadow-xl dark:shadow-none border border-slate-100 dark:border-slate-800 flex flex-col items-center justify-center p-8 overflow-hidden z-10 transition-colors">
                 <StatusBadge />
                 <div className="absolute top-6 right-6 z-20"><span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-50/80 dark:bg-slate-800 px-2.5 py-1 rounded-full border border-slate-100 dark:border-slate-700 backdrop-blur-sm">{word.tags.includes('高频') ? 'Core' : 'Word'}</span></div>
                 <div className="flex flex-col items-center text-center z-10 gap-5 w-full">
@@ -154,41 +151,53 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
             </div>
 
             {/* BACK */}
-            <div className="absolute inset-0 w-full h-full backface-hidden bg-white dark:bg-slate-900 rounded-3xl shadow-[0_15px_40px_-10px_rgba(0,0,0,0.08)] dark:shadow-none border border-slate-100 dark:border-slate-800 flex flex-col overflow-hidden transition-colors" style={{ transform: 'rotateY(180deg)' }}>
+            <div className="absolute inset-0 w-full h-full backface-hidden bg-white dark:bg-slate-900 rounded-3xl shadow-xl dark:shadow-none border border-slate-100 dark:border-slate-800 flex flex-col overflow-hidden transition-colors" style={{ transform: 'rotateY(180deg)' }}>
                 <StatusBadge />
-                <div className="flex justify-between items-center px-6 py-4 pt-16 border-b border-slate-50 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-10 shrink-0">
-                    <div className="flex flex-col"><h3 className="text-xl font-bold text-slate-800 dark:text-white">{word.term}</h3>{word.examSource && (<span className="text-[10px] font-bold text-amber-600/80 dark:text-amber-500 tracking-wide mt-0.5">{word.examSource}</span>)}</div>
+                <div className="flex justify-between items-center px-6 py-4 pt-16 border-b border-slate-100 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm z-10 shrink-0">
+                    <div className="flex flex-col"><h3 className="text-xl font-bold text-slate-800 dark:text-white">{word.term}</h3></div>
                     
                     {/* Quick Action Buttons */}
                     <div className="flex gap-2">
-                        <button onClick={(e) => { e.stopPropagation(); setShowStats(true); }} className="w-8 h-8 flex items-center justify-center bg-blue-50 dark:bg-blue-900/20 text-blue-500 rounded-full hover:scale-110 transition-transform" title="记忆曲线"><Activity size={14} /></button>
-                        <button onClick={(e) => { e.stopPropagation(); setShowComparator(true); }} className="w-8 h-8 flex items-center justify-center bg-orange-50 dark:bg-orange-900/20 text-orange-500 rounded-full hover:scale-110 transition-transform" title="辨析"><GitCompare size={14} /></button>
-                        <button onClick={(e) => { e.stopPropagation(); setShowEtymology(true); }} className="w-8 h-8 flex items-center justify-center bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 rounded-full hover:scale-110 transition-transform" title="词源"><Sprout size={14} /></button>
+                        <button onClick={(e) => { e.stopPropagation(); setShowStats(true); }} className="w-8 h-8 flex items-center justify-center bg-blue-50 dark:bg-blue-900/20 text-blue-500 rounded-full hover:scale-110 transition-transform"><Activity size={14} /></button>
+                        <button onClick={(e) => { e.stopPropagation(); setShowComparator(true); }} className="w-8 h-8 flex items-center justify-center bg-orange-50 dark:bg-orange-900/20 text-orange-500 rounded-full hover:scale-110 transition-transform"><GitCompare size={14} /></button>
+                        <button onClick={(e) => { e.stopPropagation(); setShowEtymology(true); }} className="w-8 h-8 flex items-center justify-center bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 rounded-full hover:scale-110 transition-transform"><Sprout size={14} /></button>
                         <button onClick={(e) => { e.stopPropagation(); speakText(word.term); }} className="w-8 h-8 flex items-center justify-center bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-full transition-colors"><Volume2 size={16} /></button>
                     </div>
                 </div>
 
-                <div className="flex-grow overflow-y-auto no-scrollbar p-6 space-y-5 bg-gradient-to-b from-white to-slate-50/30 dark:from-slate-900 dark:to-slate-900/50" style={{ touchAction: 'pan-y' }}>
+                <div className="flex-grow overflow-y-auto no-scrollbar p-6 space-y-6 bg-white dark:bg-slate-900" style={{ touchAction: 'pan-y' }}>
                     {word.meanings.map((meaning, idx) => (
-                    <div key={idx} className="mb-6 last:mb-0">
-                        {/* Definition Row */}
-                        <div className="flex items-baseline flex-wrap gap-x-2 gap-y-1 mb-2">
-                            <span className="text-xs font-bold text-indigo-500 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-800 font-mono shrink-0">
+                    <div key={idx} className="pb-6 border-b border-slate-100 dark:border-slate-800 last:border-0 last:pb-0">
+                        {/* 1. POS + Definition Inline */}
+                        <div className="flex items-center gap-2 mb-3">
+                            <span className="text-xs font-bold text-white bg-indigo-500 dark:bg-indigo-600 px-2 py-0.5 rounded font-mono shrink-0">
                                 {meaning.partOfSpeech}
                             </span>
-                            <span className="text-lg font-bold text-slate-800 dark:text-slate-100 leading-snug">
+                            <span className="text-lg font-bold text-slate-800 dark:text-slate-100">
                                 {meaning.definition}
                             </span>
                         </div>
                         
-                        {/* Example & Translation */}
-                        <div className="text-slate-600 dark:text-slate-400">
-                            <p className="text-base italic font-serif leading-relaxed">"{meaning.example}"</p>
-                            <p className="text-sm mt-1 text-slate-400 dark:text-slate-500">{meaning.translation}</p>
-                        </div>
+                        {/* 2. Example */}
+                        <p className="text-base text-slate-700 dark:text-slate-300 font-medium leading-relaxed mb-1.5">
+                            {meaning.example}
+                        </p>
+
+                        {/* 3. Translation */}
+                        <p className="text-sm text-slate-400 dark:text-slate-500">
+                            {meaning.translation}
+                        </p>
                     </div>
                     ))}
-                    {word.mnemonic && (<div className="bg-indigo-50/60 dark:bg-indigo-900/20 rounded-xl p-3 border border-indigo-100/60 dark:border-indigo-800 mt-4"><div className="flex gap-2 items-start"><Lightbulb size={14} className="text-indigo-500 dark:text-indigo-400 mt-0.5 shrink-0" /><p className="text-xs font-medium text-indigo-800/90 dark:text-indigo-300 leading-relaxed">{word.mnemonic}</p></div></div>)}
+                    
+                    {word.mnemonic && (
+                        <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 border border-slate-100 dark:border-slate-700">
+                            <div className="flex gap-2 items-start">
+                                <Lightbulb size={14} className="text-amber-500 mt-0.5 shrink-0" />
+                                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{word.mnemonic}</p>
+                            </div>
+                        </div>
+                    )}
                     <div className="h-4"></div>
                 </div>
 
