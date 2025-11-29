@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kaoyan-vocab-v53'; // Version Bump to v53 (Dual Mode)
+const CACHE_NAME = 'kaoyan-vocab-v54'; // Version Bump
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -38,6 +38,12 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
+  // CRITICAL FIX: Bypass Service Worker for API calls and non-GET requests
+  // This prevents "Failed to fetch" errors when the SW fails to handle POST requests or CORS
+  if (event.request.method !== 'GET' || url.hostname.includes('api.deepseek.com')) {
+      return;
+  }
+
   // 1. Cache External Assets (Tailwind, React, Lucide Icons)
   if (
       url.hostname.includes('cdn') || 
@@ -67,7 +73,8 @@ self.addEventListener('fetch', (event) => {
     fetch(event.request)
       .then((response) => {
         return caches.open(CACHE_NAME).then((cache) => {
-           if (event.request.url.startsWith('http') && event.request.method === 'GET') {
+           // Only cache valid GET responses
+           if (event.request.url.startsWith('http') && response.status === 200) {
                cache.put(event.request, response.clone());
            }
            return response;

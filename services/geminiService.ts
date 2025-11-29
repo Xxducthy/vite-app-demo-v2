@@ -113,7 +113,8 @@ Schema:
       return parsed;
 
   } catch (error: any) {
-      if (error.name === 'AbortError') throw new Error("Timeout");
+      if (error.name === 'AbortError') throw new Error("Request Timeout");
+      if (error.message === 'Failed to fetch') throw new Error("Network Error. Please check connection.");
       throw error;
   } finally {
       clearTimeout(timeoutId);
