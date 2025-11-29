@@ -1,4 +1,3 @@
-
 import { AIEnrichResponse, ComparatorResult, EtymologyResult } from "../types";
 
 // DeepSeek / OpenAI Compatible Service
@@ -179,18 +178,29 @@ JSON ONLY. No filler.`;
   }
 };
 
-// NEW: Generate Contextual Story
-export const generateStory = async (words: string[]): Promise<{english: string, chinese: string}> => {
+// NEW: Generate Contextual Story with Vocabulary
+export const generateStory = async (words: string[]): Promise<{english: string, chinese: string, vocabulary: Array<{word: string, definition: string}>}> => {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key missing");
 
   const systemPrompt = `You are a helpful English teacher. 
 Task: Write a short, coherent, and slightly funny story (max 120 words) using ALL the following words: ${words.join(', ')}.
+
 Requirements:
 1. English: Highlight the keywords using **bold** markdown.
-2. Chinese: Provide a translation. **ALSO highlight the corresponding Chinese keywords using **bold** markdown**.
-3. CRITICAL: Do NOT add quotation marks (" ") around the highlighted words in Chinese. Just bold them.
-4. Return JSON format only: { "english": "...", "chinese": "..." }`;
+2. Chinese: Provide a translation. **ALSO highlight the corresponding Chinese keywords using **bold** markdown**. 
+3. CRITICAL: Do NOT add quotation marks (" ") around the highlighted words in Chinese translation. Just bold them.
+4. Vocabulary List: Extract ALL the target words AND any potentially difficult words used in the story. Provide their lemma (root form) and a short Chinese definition.
+
+Return JSON format only: 
+{ 
+  "english": "...", 
+  "chinese": "...",
+  "vocabulary": [
+    { "word": "abide", "definition": "忍受" },
+    { "word": "other_word", "definition": "释义" }
+  ]
+}`;
 
   try {
       const response = await fetch(API_URL, {

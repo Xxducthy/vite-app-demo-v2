@@ -1,15 +1,78 @@
-
 import React, { useState, useEffect } from 'react';
 import { Play, CheckCircle2, Coffee, ArrowRight, Layers, Shuffle, RotateCcw, Dumbbell, Zap, AlertTriangle, PenTool, BookOpen, Sparkles, X, Loader2 } from 'lucide-react';
 import { StudyMode, ComparatorResult, EtymologyResult } from '../types';
 import { AUTOCOMPLETE_DICT } from '../constants';
 
+// Helper: Smart Dictionary Lookup with AI Vocab Priority
+const findInDict = (rawText: string, aiVocab?: Array<{word: string, definition: string}>) => {
+  // Clean punctuation and lowercase
+  let word = rawText.toLowerCase().replace(/[^a-z]+/g, '');
+  if (!word) return null;
+  
+  // 0. CHECK AI VOCAB FIRST (Perfect Match from Story Context)
+  if (aiVocab) {
+      const aiMatch = aiVocab.find(v => v.word.toLowerCase() === word);
+      if (aiMatch) return { term: aiMatch.word, pos: 'AI', definition: aiMatch.definition };
+
+      // 0.1 Check AI Vocab for Lemma match (if word is 'running', ai might have 'run')
+      const aiLemmaMatch = aiVocab.find(v => word.startsWith(v.word.toLowerCase()) || v.word.toLowerCase().startsWith(word));
+      if (aiLemmaMatch) return { term: aiLemmaMatch.word, pos: 'AI', definition: aiLemmaMatch.definition };
+  }
+
+  // 1. Exact match Local
+  let match = AUTOCOMPLETE_DICT.find(d => d.term.toLowerCase() === word);
+  if (match) return match;
+
+  // 2. Suffix stripping for simple morphology
+  const suffixes = ['ing', 'ies', 'ves', 'es', 'ed', 'ly', 's', 'd'];
+  for (const suffix of suffixes) {
+    if (word.endsWith(suffix)) {
+      let base = word.slice(0, -suffix.length);
+      
+      // Check AI Vocab with base
+      if (aiVocab) {
+          const aiBaseMatch = aiVocab.find(v => v.word.toLowerCase() === base);
+          if (aiBaseMatch) return { term: aiBaseMatch.word, pos: 'AI', definition: aiBaseMatch.definition };
+      }
+
+      // Check Local
+      if (base.length > 1) {
+         match = AUTOCOMPLETE_DICT.find(d => d.term.toLowerCase() === base);
+         if (match) return match;
+      }
+      
+      // Special rules reconstruction
+      if (suffix === 'ies') base += 'y'; 
+      if (suffix === 'ves') base += 'f'; 
+      
+      if (base.length > 1) {
+         match = AUTOCOMPLETE_DICT.find(d => d.term.toLowerCase() === base);
+         if (match) return match;
+      }
+
+      // Handle 'baked' -> 'bake' (e suffix restoration)
+      if (suffix === 'ing' || suffix === 'd' || suffix === 'ed') {
+         const baseE = base + 'e';
+         match = AUTOCOMPLETE_DICT.find(d => d.term.toLowerCase() === baseE);
+         if (match) return match;
+         
+         // Check AI vocab for restored E
+         if (aiVocab) {
+             const aiBaseEMatch = aiVocab.find(v => v.word.toLowerCase() === baseE);
+             if (aiBaseEMatch) return { term: aiBaseEMatch.word, pos: 'AI', definition: aiBaseEMatch.definition };
+         }
+      }
+    }
+  }
+  return null;
+};
+
 // Helper for clickable story words
-const StoryWord: React.FC<{ text: string }> = ({ text }) => {
+const StoryWord: React.FC<{ text: string, aiVocab?: Array<{word: string, definition: string}> }> = ({ text, aiVocab }) => {
     const [showTip, setShowTip] = useState(false);
-    // Clean punctuation
-    const rawWord = text.replace(/[^a-zA-Z-]/g, '').toLowerCase();
-    const match = AUTOCOMPLETE_DICT.find(d => d.term.toLowerCase() === rawWord);
+    
+    // Use smart lookup with AI list priority
+    const match = findInDict(text, aiVocab);
     
     // Check if it's a bolded/highlighted keyword (passed as **word**)
     const isHighlight = text.startsWith('**');
@@ -24,9 +87,12 @@ const StoryWord: React.FC<{ text: string }> = ({ text }) => {
                 {display}
             </span>
             {showTip && match && (
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-slate-900 text-white text-xs p-2 rounded-lg shadow-xl z-50 whitespace-nowrap min-w-[100px]">
-                    <div className="font-bold mb-0.5">{match.term} <span className="text-slate-400 font-normal">{match.pos}</span></div>
-                    <div>{match.definition}</div>
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-slate-900 text-white text-xs p-3 rounded-xl shadow-xl z-50 whitespace-nowrap min-w-[120px] animate-in fade-in zoom-in duration-200">
+                    <div className="flex items-baseline gap-2 mb-1 border-b border-white/20 pb-1">
+                        <span className="font-bold text-sm">{match.term}</span> 
+                        <span className="text-indigo-300 font-mono text-[10px]">{match.pos}</span>
+                    </div>
+                    <div className="text-slate-200 leading-tight">{match.definition}</div>
                     {/* Triangle */}
                     <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-900"></div>
                 </div>
@@ -49,7 +115,7 @@ interface StudySessionProps {
   studyMode: StudyMode;
   setStudyMode: (mode: StudyMode) => void;
   completedWordTerms?: string[];
-  preloadedStory?: {english: string, chinese: string} | null;
+  preloadedStory?: {english: string, chinese: string, vocabulary?: Array<{word: string, definition: string}>} | null;
   isStoryLoading?: boolean;
   currentWordExtraData?: { comparator?: ComparatorResult, etymology?: EtymologyResult };
 }
@@ -76,7 +142,7 @@ export const StudySession: React.FC<StudySessionProps> = ({
   // Parse English Story to make it clickable
   const renderInteractiveEnglish = (text: string) => {
       // Split by spaces but keep structure
-      return text.split(' ').map((chunk, i) => <StoryWord key={i} text={chunk} />);
+      return text.split(' ').map((chunk, i) => <StoryWord key={i} text={chunk} aiVocab={preloadedStory?.vocabulary} />);
   };
 
   // Parse Chinese Story for highlighting (replace **text** with styled span, NO QUOTES)
@@ -180,7 +246,7 @@ export const StudySession: React.FC<StudySessionProps> = ({
                   onClick={() => setShowStoryModal(true)}
                   className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl font-bold text-base shadow-lg shadow-purple-200 dark:shadow-none flex items-center justify-center gap-2 transition-transform active:scale-95 mb-2 relative overflow-hidden group"
                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                  <div className="absolute inset-0 bg-gradient-to-r from-purple-50 via-pink-500 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                   <span className="relative flex items-center gap-2">
                       {isStoryLoading ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
                       {isStoryLoading ? 'AI 故事生成中...' : '查看 AI 助记故事'}
