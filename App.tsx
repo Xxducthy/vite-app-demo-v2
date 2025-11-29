@@ -17,7 +17,7 @@ import { Book, List, Plus, GraduationCap, AlertCircle, Search, Settings, BookOpe
 const STORAGE_KEY = 'kaoyan_vocab_progress_v1';
 const HISTORY_KEY = 'kaoyan_study_history_v1';
 const SESSION_STORAGE_KEY = 'kaoyan_session_state_v1';
-const APP_VERSION = 'v8.4 (AI Vocab Story)';
+const APP_VERSION = 'v8.5 (Love Store Update)';
 
 const App: React.FC = () => {
   // --- Data State ---
@@ -139,8 +139,8 @@ const App: React.FC = () => {
   useEffect(() => {
     if (isSessionActive && sessionQueue.length === 0 && !hasFinishedSession) {
         setHasFinishedSession(true);
-        // Bonus for finishing session
-        setPoints(p => p + 50);
+        // Bonus for finishing session (Increased to 200)
+        setPoints(p => p + 200);
     }
   }, [isSessionActive, sessionQueue.length, hasFinishedSession]);
 
@@ -329,9 +329,9 @@ const App: React.FC = () => {
     updateHistory();
     setSessionStats(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
 
-    // Award Points on Mastery
+    // Award Points on Mastery (Increased to 50)
     if (actionStatus === WordStatus.Mastered) {
-        setPoints(p => p + 10);
+        setPoints(p => p + 50);
     }
 
     setWords(prev => prev.map(w => {
