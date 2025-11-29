@@ -18,7 +18,7 @@ import { Book, List, Plus, GraduationCap, AlertCircle, Search, Settings, BookOpe
 const STORAGE_KEY = 'kaoyan_vocab_progress_v1';
 const HISTORY_KEY = 'kaoyan_study_history_v1';
 const SESSION_STORAGE_KEY = 'kaoyan_session_state_v1';
-const APP_VERSION = 'v8.8 (UI Fixes)';
+const APP_VERSION = 'v8.9 (Auto Enrich)';
 
 const App: React.FC = () => {
   // --- Data State ---
@@ -196,6 +196,33 @@ const App: React.FC = () => {
     setIsIOS(/iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream);
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
+
+  // --- Helper: Background Advanced Enrichment ---
+  const runBackgroundAdvancedEnrichment = async (targetWords: Word[]) => {
+      // Process serially or with limited concurrency to avoid 429 Rate Limits
+      for (const word of targetWords) {
+          // 1. Etymology
+          if (!word.etymology) {
+              analyzeEtymology(word.term)
+                .then(res => {
+                    setWords(prev => prev.map(w => w.id === word.id ? { ...w, etymology: res } : w));
+                })
+                .catch(() => {}); // Silent fail is okay
+          }
+
+          // 2. Comparator
+          if (!word.comparator) {
+              analyzeConfusion(word.term)
+                .then(res => {
+                    setWords(prev => prev.map(w => w.id === word.id ? { ...w, comparator: res } : w));
+                })
+                .catch(() => {});
+          }
+
+          // Slight delay to be gentle on the API
+          await new Promise(r => setTimeout(r, 800)); 
+      }
+  };
 
   // --- Handlers ---
   const updateHistory = () => {
@@ -398,7 +425,14 @@ const App: React.FC = () => {
     setIsLoading(true); setError(null);
     try {
       const data = await enrichWordWithAI(wordToEnrich.term);
-      setWords(prev => prev.map(w => w.id === wordToEnrich.id ? { ...w, ...data } : w));
+      // When manually enriching, also trigger advanced data refresh
+      setWords(prev => {
+          const newWords = prev.map(w => w.id === wordToEnrich.id ? { ...w, ...data } : w);
+          // Trigger advanced enrichment for this single word
+          const updatedWord = newWords.find(w => w.id === wordToEnrich.id);
+          if (updatedWord) runBackgroundAdvancedEnrichment([updatedWord]);
+          return newWords;
+      });
     } catch (err: any) {
       setError(err.message?.includes("401") ? "Key 无效" : "请求失败");
     } finally { setIsLoading(false); }
@@ -425,19 +459,41 @@ const App: React.FC = () => {
     
     const total = newWords.length;
     setEnrichProgress({ current: 0, total });
+    
     batchEnrichWords(newWords.map(w => w.term)).then(enrichedResults => {
+        let updatedNewWords: Word[] = [];
+        
         setWords(prev => prev.map(w => {
             const result = enrichedResults.find(r => r.term?.toLowerCase() === w.term.toLowerCase());
-            return result ? { ...w, ...result } : w;
+            if (result && newWords.some(nw => nw.id === w.id)) {
+                const updated = { ...w, ...result };
+                updatedNewWords.push(updated);
+                return updated;
+            }
+            return w;
         }));
+        
         setEnrichProgress(null);
+
+        // Trigger Advanced Enrichment automatically for new words
+        if (updatedNewWords.length > 0) {
+            runBackgroundAdvancedEnrichment(updatedNewWords);
+        } else if (newWords.length > 0) {
+            // Fallback for offline mode or fast batch failure cases to still try advanced
+            runBackgroundAdvancedEnrichment(newWords);
+        }
     });
   };
 
   const handleLoadSample = () => { handleImport(['superfluous', 'ambiguous', 'consensus']); };
   const handleLookup = (term: string) => { setLookupTerm(term); setMode('dictionary'); setSearchTerm(''); setShowSearchDropdown(false); };
   const handleQuickAdd = (term: string) => { handleImport([term]); };
-  const handleAddToVocabulary = (newWord: Word) => { setWords(prev => [newWord, ...prev]); };
+  
+  const handleAddToVocabulary = (newWord: Word) => { 
+      setWords(prev => [newWord, ...prev]); 
+      // Also trigger advanced enrichment for single added word
+      runBackgroundAdvancedEnrichment([newWord]);
+  };
 
   const handleSearchChange = (text: string) => {
     setSearchTerm(text);
@@ -476,7 +532,7 @@ const App: React.FC = () => {
     <div className="flex flex-col h-full bg-slate-50 dark:bg-black text-slate-900 dark:text-slate-100 relative selection:bg-indigo-100 selection:text-indigo-700 font-sans transition-colors">
       {commutePlaylist && <CommutePlayer playlist={commutePlaylist} onClose={() => setCommutePlaylist(null)} />}
       {showInstallGuide && <InstallGuide onClose={() => setShowInstallGuide(false)} isIOS={isIOS} />}
-      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} currentWords={words} onRestoreData={(d) => setWords(d)} onClearData={handleClearData} appVersion={APP_VERSION} />}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} currentWords={words} onRestoreData={(d) => setWords(d)} onMergeData={(d) => setWords(prev => [...d, ...prev])} onClearData={handleClearData} appVersion={APP_VERSION} />}
 
       <div className="fixed top-[-10%] left-[-10%] w-[500px] h-[500px] bg-indigo-100/60 dark:bg-indigo-900/20 rounded-full blur-[80px] pointer-events-none z-0"></div>
       <div className="fixed bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-purple-100/50 dark:bg-purple-900/20 rounded-full blur-[80px] pointer-events-none z-0"></div>
@@ -541,7 +597,11 @@ const App: React.FC = () => {
                             onStatusChange={handleStatusChange} 
                             onNext={handleNext} 
                             mode={studyMode}
-                            extraData={currentExtraData}
+                            // Pass saved data OR preloaded session data
+                            extraData={{
+                                comparator: currentWord.comparator || currentExtraData?.comparator,
+                                etymology: currentWord.etymology || currentExtraData?.etymology
+                            }}
                         />
                         <div className="w-full max-w-xs mt-6 animate-in fade-in slide-in-from-bottom-4">
                             <div className="flex justify-between items-end mb-1.5 px-1">

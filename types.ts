@@ -24,6 +24,10 @@ export interface Word {
   repetitions: number; // Number of consecutive successful recalls
   easeFactor: number; // SM-2 Ease Factor (starts at 2.5)
   lastReviewed?: number;
+
+  // Persisted Advanced Data (New)
+  etymology?: EtymologyResult;
+  comparator?: ComparatorResult;
 }
 
 export enum WordStatus {

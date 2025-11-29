@@ -16,7 +16,7 @@ interface DictionaryDetailProps {
   onBack: () => void;
 }
 
-// ... (findInDict, WordTooltip, InteractiveSentence helpers kept same as before, omitted for brevity but presumed present)
+// Helper: Smart Dictionary Lookup (Handles plurals, past tense, etc.)
 const findInDict = (rawWord: string) => {
   let word = rawWord.toLowerCase().replace(/^[^a-z]+|[^a-z]+$/g, '').replace(/['’]s$/, '');
   if (!word) return null;
@@ -131,9 +131,21 @@ export const DictionaryDetail: React.FC<DictionaryDetailProps> = ({ term, existi
 
   return (
     <div className="h-full bg-white dark:bg-slate-900 flex flex-col transition-colors relative">
-      {/* Modals */}
-      {showComparator && previewData?.term && <ComparatorModal term={previewData.term} onClose={() => setShowComparator(false)} />}
-      {showEtymology && previewData?.term && <EtymologyModal term={previewData.term} onClose={() => setShowEtymology(false)} />}
+      {/* Modals - Updated to use persisted data if available */}
+      {showComparator && previewData?.term && (
+          <ComparatorModal 
+            term={previewData.term} 
+            onClose={() => setShowComparator(false)} 
+            preloadedData={existingWord?.comparator} 
+          />
+      )}
+      {showEtymology && previewData?.term && (
+          <EtymologyModal 
+            term={previewData.term} 
+            onClose={() => setShowEtymology(false)} 
+            preloadedData={existingWord?.etymology} 
+          />
+      )}
 
       <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3 bg-white dark:bg-slate-900 sticky top-0 z-20">
         <button onClick={onBack} className="p-2 -ml-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-500 dark:text-slate-400 transition-colors">
