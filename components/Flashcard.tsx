@@ -165,28 +165,36 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
                     </div>
                 </div>
 
-                <div className="flex-grow overflow-y-auto no-scrollbar p-6 space-y-6 bg-white dark:bg-slate-900" style={{ touchAction: 'pan-y' }}>
+                {/* SCROLLABLE CONTENT AREA */}
+                {/* CRITICAL FIX: Stop propagation on content area to allow native scrolling without triggering swipe */}
+                <div 
+                    className="flex-grow overflow-y-auto no-scrollbar p-6 space-y-6 bg-white dark:bg-slate-900" 
+                    style={{ touchAction: 'pan-y' }}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onTouchMove={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()} 
+                >
                     {word.meanings.map((meaning, idx) => (
-                    <div key={idx} className="pb-6 border-b border-slate-100 dark:border-slate-800 last:border-0 last:pb-0">
-                        {/* 1. POS + Definition Inline */}
-                        <div className="flex items-center gap-2 mb-3">
-                            <span className="text-xs font-bold text-white bg-indigo-500 dark:bg-indigo-600 px-2 py-0.5 rounded font-mono shrink-0">
+                    <div key={idx} className="pb-4 border-b border-slate-100 dark:border-slate-800 last:border-0 last:pb-0">
+                        {/* 1. POS + Definition Inline - Simplified Layout */}
+                        <div className="flex flex-wrap items-baseline gap-2 mb-2">
+                            <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400 font-mono bg-indigo-50 dark:bg-indigo-900/30 px-1.5 rounded">
                                 {meaning.partOfSpeech}
                             </span>
-                            <span className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                            <span className="text-lg font-bold text-slate-800 dark:text-slate-100 leading-snug">
                                 {meaning.definition}
                             </span>
                         </div>
                         
-                        {/* 2. Example */}
-                        <p className="text-base text-slate-700 dark:text-slate-300 font-medium leading-relaxed mb-1.5">
-                            {meaning.example}
-                        </p>
-
-                        {/* 3. Translation */}
-                        <p className="text-sm text-slate-400 dark:text-slate-500">
-                            {meaning.translation}
-                        </p>
+                        {/* 2. Example & Translation */}
+                        <div className="pl-1">
+                            <p className="text-base text-slate-700 dark:text-slate-300 font-medium leading-relaxed font-serif">
+                                {meaning.example}
+                            </p>
+                            <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
+                                {meaning.translation}
+                            </p>
+                        </div>
                     </div>
                     ))}
                     
