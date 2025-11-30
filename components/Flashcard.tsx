@@ -83,13 +83,22 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
       const deltaX = currentX - touchStart.x; 
       const deltaY = currentY - touchStart.y;
 
-      // FIX: Aggressive Vertical scroll detection
-      // If movement is mostly vertical, ignore swipe to allow native scrolling
-      if (Math.abs(deltaY) > Math.abs(deltaX) * 0.8) {
-          return;
+      // FIX: Improved Scroll Detection
+      // If the user is scrolling vertically (deltaY > deltaX), we DO NOT interpret this as a swipe.
+      // We essentially "ignore" this move event for swiping purposes, allowing the browser 
+      // to process it as a native scroll on the child container.
+      if (Math.abs(deltaY) > Math.abs(deltaX)) {
+          // If we previously started swiping, cancel it to avoid "stuck" cards
+          if (Math.abs(swipeOffset) > 0) setSwipeOffset(0);
+          return; 
       }
 
-      if (Math.abs(deltaX) > 20) setSwipeOffset(deltaX); 
+      // Only enable swipe logic if horizontal movement is significant
+      if (Math.abs(deltaX) > 10) {
+          // e.preventDefault() is tricky in React passive listeners, 
+          // so we rely on 'touch-action: pan-y' CSS on the container.
+          setSwipeOffset(deltaX); 
+      }
   };
 
   const handleTouchEnd = () => { if (!touchStart || mode === 'spelling') return; const threshold = 100; if (swipeOffset > threshold) handleAction(WordStatus.Mastered); else if (swipeOffset < -threshold) handleAction(WordStatus.New); setSwipeOffset(0); setTouchStart(null); };
@@ -138,11 +147,23 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
         </div>
     )}
 
-    <div className="w-full max-w-lg aspect-[3/4] md:aspect-[16/10] relative cursor-pointer group perspective-1000">
+    {/* MAIN CARD CONTAINER */}
+    {/* Update 1: Size Fix - 'max-w-lg' -> 'md:max-w-4xl' and 'md:h-[650px]' for desktop comfort */}
+    <div className="w-full max-w-lg md:max-w-4xl aspect-[3/4] md:aspect-auto md:h-[650px] relative cursor-pointer group perspective-1000">
+      
+      {/* Swipe Indicators */}
       <div className={`absolute top-1/2 left-0 -translate-y-1/2 -translate-x-full z-0 transition-opacity duration-300 ${swipeOffset > 50 ? 'opacity-100' : 'opacity-0'}`}><div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shadow-sm"><Check size={24} strokeWidth={3} /></div></div>
       <div className={`absolute top-1/2 right-0 -translate-y-1/2 translate-x-full z-0 transition-opacity duration-300 ${swipeOffset < -50 ? 'opacity-100' : 'opacity-0'}`}><div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 shadow-sm"><X size={24} strokeWidth={3} /></div></div>
 
-      <div className="w-full h-full transition-transform duration-300 ease-out" style={{ transform: `translate3d(${swipeOffset}px, 0, 0) rotate(${rotateDeg}deg)`, cursor: swipeOffset !== 0 ? 'grabbing' : 'pointer' }} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onClick={() => setIsFlipped(!isFlipped)}>
+      {/* Card Body - Draggable */}
+      <div 
+        className="w-full h-full transition-transform duration-300 ease-out" 
+        style={{ transform: `translate3d(${swipeOffset}px, 0, 0) rotate(${rotateDeg}deg)`, cursor: swipeOffset !== 0 ? 'grabbing' : 'pointer' }} 
+        onTouchStart={handleTouchStart} 
+        onTouchMove={handleTouchMove} 
+        onTouchEnd={handleTouchEnd} 
+        onClick={() => setIsFlipped(!isFlipped)}
+      >
         <div className="relative w-full h-full transition-transform duration-500 transform-style-3d origin-center" style={{ transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }}>
             
             {/* FRONT */}
@@ -150,7 +171,7 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
                 <StatusBadge />
                 <div className="absolute top-6 right-6 z-20"><span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 bg-slate-50/80 dark:bg-slate-800 px-2.5 py-1 rounded-full border border-slate-100 dark:border-slate-700 backdrop-blur-sm">{word.tags.includes('高频') ? 'Core' : 'Word'}</span></div>
                 <div className="flex flex-col items-center text-center z-10 gap-5 w-full">
-                    <h2 className="text-4xl md:text-6xl font-bold text-slate-800 dark:text-white tracking-tight leading-tight select-none">{word.term}</h2>
+                    <h2 className="text-4xl md:text-7xl font-bold text-slate-800 dark:text-white tracking-tight leading-tight select-none">{word.term}</h2>
                     {word.phonetic && (<button onClick={(e) => { e.stopPropagation(); speakText(word.term); }} className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-full transition-all active:scale-95 group/audio border border-slate-100 dark:border-slate-800"><span className="text-base font-mono opacity-80 font-medium">{word.phonetic}</span><Volume2 size={16} className="group-hover/audio:animate-pulse" /></button>)}
                 </div>
                 <div className="absolute bottom-8 w-full px-10 flex justify-between items-end text-slate-300 dark:text-slate-600 opacity-0 md:opacity-100 transition-opacity">
@@ -163,32 +184,30 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
             {/* BACK */}
             <div className="absolute inset-0 w-full h-full backface-hidden bg-white dark:bg-slate-900 rounded-3xl shadow-xl dark:shadow-none border border-slate-100 dark:border-slate-800 flex flex-col overflow-hidden transition-colors" style={{ transform: 'rotateY(180deg)' }}>
                 <StatusBadge />
-                <div className="flex justify-between items-center px-6 py-4 pt-16 border-b border-slate-100 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm z-10 shrink-0">
+                <div className="flex justify-between items-center px-6 md:px-10 py-4 pt-16 border-b border-slate-100 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm z-10 shrink-0">
                     <div className="flex flex-col">
-                        <h3 className="text-xl font-bold text-slate-800 dark:text-white">{word.term}</h3>
-                        {word.phonetic && <span className="text-sm font-mono text-slate-400">{word.phonetic}</span>}
+                        <h3 className="text-xl md:text-3xl font-bold text-slate-800 dark:text-white">{word.term}</h3>
+                        {word.phonetic && <span className="text-sm md:text-base font-mono text-slate-400">{word.phonetic}</span>}
                     </div>
                     
                     {/* Quick Action Buttons */}
-                    <div className="flex gap-2">
-                        <button onClick={(e) => { e.stopPropagation(); setShowStats(true); }} className="w-8 h-8 flex items-center justify-center bg-blue-50 dark:bg-blue-900/20 text-blue-500 rounded-full hover:scale-110 transition-transform"><Activity size={14} /></button>
-                        <button onClick={(e) => { e.stopPropagation(); setShowComparator(true); }} className="w-8 h-8 flex items-center justify-center bg-orange-50 dark:bg-orange-900/20 text-orange-500 rounded-full hover:scale-110 transition-transform"><GitCompare size={14} /></button>
-                        <button onClick={(e) => { e.stopPropagation(); setShowEtymology(true); }} className="w-8 h-8 flex items-center justify-center bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 rounded-full hover:scale-110 transition-transform"><Sprout size={14} /></button>
-                        <button onClick={(e) => { e.stopPropagation(); speakText(word.term); }} className="w-8 h-8 flex items-center justify-center bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-full transition-colors"><Volume2 size={16} /></button>
+                    <div className="flex gap-2 md:gap-3">
+                        <button onClick={(e) => { e.stopPropagation(); setShowStats(true); }} className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center bg-blue-50 dark:bg-blue-900/20 text-blue-500 rounded-full hover:scale-110 transition-transform"><Activity size={14} /></button>
+                        <button onClick={(e) => { e.stopPropagation(); setShowComparator(true); }} className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center bg-orange-50 dark:bg-orange-900/20 text-orange-500 rounded-full hover:scale-110 transition-transform"><GitCompare size={14} /></button>
+                        <button onClick={(e) => { e.stopPropagation(); setShowEtymology(true); }} className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 rounded-full hover:scale-110 transition-transform"><Sprout size={14} /></button>
+                        <button onClick={(e) => { e.stopPropagation(); speakText(word.term); }} className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-full transition-colors"><Volume2 size={16} /></button>
                     </div>
                 </div>
 
                 {/* SCROLLABLE CONTENT AREA */}
-                {/* Fixed: Desktop scrolling enabled, text selection won't trigger flip */}
+                {/* Fix 2: Clean Scroll - Removed inner stopPropagation/onWheel blockers to let native browser scroll work */}
+                {/* Added 'touch-action: pan-y' to explicit allow vertical scroll */}
                 <div 
-                    className="flex-grow overflow-y-auto p-6 space-y-6 bg-white dark:bg-slate-900" 
+                    className="flex-grow overflow-y-auto p-6 md:p-10 space-y-6 md:space-y-8 bg-white dark:bg-slate-900" 
                     style={{ touchAction: 'pan-y' }}
-                    onTouchStart={(e) => e.stopPropagation()}
-                    onTouchMove={(e) => e.stopPropagation()}
-                    onWheel={(e) => e.stopPropagation()} // Isolate wheel scroll
                     onClick={(e) => {
                         const selection = window.getSelection();
-                        // If user is selecting text, do NOT flip the card
+                        // If selecting text, don't flip
                         if (selection && selection.toString().length > 0) {
                             e.stopPropagation();
                         }
@@ -199,21 +218,21 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
                         {/* 1. POS + Definition Inline */}
                         <div className="mb-3">
                             <div className="flex items-center gap-2 mb-1">
-                                <span className="text-xs font-bold text-white bg-indigo-500 dark:bg-indigo-600 px-2 py-0.5 rounded font-mono">
+                                <span className="text-xs md:text-sm font-bold text-white bg-indigo-500 dark:bg-indigo-600 px-2 py-0.5 rounded font-mono">
                                     {meaning.partOfSpeech}
                                 </span>
                             </div>
-                            <div className="text-lg font-bold text-slate-800 dark:text-slate-100 leading-snug">
+                            <div className="text-lg md:text-2xl font-bold text-slate-800 dark:text-slate-100 leading-snug">
                                 {meaning.definition}
                             </div>
                         </div>
                         
                         {/* 2. Example & Translation */}
-                        <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 border border-slate-100 dark:border-slate-700/50">
-                            <p className="text-base text-slate-700 dark:text-slate-300 font-medium leading-relaxed font-serif mb-1.5">
+                        <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 md:p-5 border border-slate-100 dark:border-slate-700/50">
+                            <p className="text-base md:text-xl text-slate-700 dark:text-slate-300 font-medium leading-relaxed font-serif mb-2">
                                 {meaning.example}
                             </p>
-                            <p className="text-sm text-slate-400 dark:text-slate-500">
+                            <p className="text-sm md:text-base text-slate-400 dark:text-slate-500">
                                 {meaning.translation}
                             </p>
                         </div>
@@ -221,20 +240,20 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
                     ))}
                     
                     {word.mnemonic && (
-                        <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 border border-slate-100 dark:border-slate-700">
+                        <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 md:p-5 border border-slate-100 dark:border-slate-700">
                             <div className="flex gap-2 items-start">
-                                <Lightbulb size={14} className="text-amber-500 mt-0.5 shrink-0" />
-                                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{word.mnemonic}</p>
+                                <Lightbulb size={16} className="text-amber-500 mt-0.5 shrink-0" />
+                                <p className="text-xs md:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{word.mnemonic}</p>
                             </div>
                         </div>
                     )}
                     <div className="h-4"></div>
                 </div>
 
-                <div className="px-6 py-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 grid grid-cols-3 gap-3 z-20 shrink-0">
-                    <button onClick={(e) => { e.stopPropagation(); handleAction(WordStatus.New); }} className="flex flex-col items-center justify-center py-2 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors active:scale-95 group"><X size={20} className="text-rose-300 dark:text-rose-800 group-hover:text-rose-500 dark:group-hover:text-rose-500 mb-1 transition-colors" /><span className="text-[10px] font-bold text-rose-300 dark:text-rose-800 group-hover:text-rose-500 dark:group-hover:text-rose-500 uppercase">Forget</span></button>
-                    <button onClick={(e) => { e.stopPropagation(); handleAction(WordStatus.Learning); }} className="flex flex-col items-center justify-center py-2 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors active:scale-95 group"><Repeat size={20} className="text-amber-300 dark:text-amber-800 group-hover:text-amber-500 dark:group-hover:text-amber-500 mb-1 transition-colors" /><span className="text-[10px] font-bold text-amber-300 dark:text-amber-800 group-hover:text-amber-500 dark:group-hover:text-amber-500 uppercase">Blurry</span></button>
-                    <button onClick={(e) => { e.stopPropagation(); handleAction(WordStatus.Mastered); }} className="flex flex-col items-center justify-center py-2 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors active:scale-95 group"><Check size={20} className="text-emerald-300 dark:text-emerald-800 group-hover:text-emerald-500 dark:group-hover:text-emerald-500 mb-1 transition-colors" /><span className="text-[10px] font-bold text-emerald-300 dark:text-emerald-800 group-hover:text-emerald-500 dark:group-hover:text-emerald-500 uppercase">Master</span></button>
+                <div className="px-6 md:px-10 py-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 grid grid-cols-3 gap-3 z-20 shrink-0">
+                    <button onClick={(e) => { e.stopPropagation(); handleAction(WordStatus.New); }} className="flex flex-col items-center justify-center py-2 md:py-4 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors active:scale-95 group"><X size={20} className="text-rose-300 dark:text-rose-800 group-hover:text-rose-500 dark:group-hover:text-rose-500 mb-1 transition-colors" /><span className="text-[10px] md:text-xs font-bold text-rose-300 dark:text-rose-800 group-hover:text-rose-500 dark:group-hover:text-rose-500 uppercase">Forget</span></button>
+                    <button onClick={(e) => { e.stopPropagation(); handleAction(WordStatus.Learning); }} className="flex flex-col items-center justify-center py-2 md:py-4 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors active:scale-95 group"><Repeat size={20} className="text-amber-300 dark:text-amber-800 group-hover:text-amber-500 dark:group-hover:text-amber-500 mb-1 transition-colors" /><span className="text-[10px] md:text-xs font-bold text-amber-300 dark:text-amber-800 group-hover:text-amber-500 dark:group-hover:text-amber-500 uppercase">Blurry</span></button>
+                    <button onClick={(e) => { e.stopPropagation(); handleAction(WordStatus.Mastered); }} className="flex flex-col items-center justify-center py-2 md:py-4 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors active:scale-95 group"><Check size={20} className="text-emerald-300 dark:text-emerald-800 group-hover:text-emerald-500 dark:group-hover:text-emerald-500 mb-1 transition-colors" /><span className="text-[10px] md:text-xs font-bold text-emerald-300 dark:text-emerald-800 group-hover:text-emerald-500 dark:group-hover:text-emerald-500 uppercase">Master</span></button>
                 </div>
             </div>
         </div>
