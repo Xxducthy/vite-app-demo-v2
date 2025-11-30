@@ -46,7 +46,17 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
   const speakText = (text: string) => {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'en-US'; utterance.rate = 0.9;
+    
+    // Voice Selection Logic
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice = voices.find(v => v.name.includes("Google US English")) || 
+                           voices.find(v => v.name.includes("Microsoft Zira")) ||
+                           voices.find(v => v.lang === 'en-US');
+    
+    if (preferredVoice) utterance.voice = preferredVoice;
+    
+    utterance.lang = 'en-US'; 
+    utterance.rate = 0.9;
     utteranceRef.current = utterance;
     window.speechSynthesis.speak(utterance);
   };
@@ -154,7 +164,10 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
             <div className="absolute inset-0 w-full h-full backface-hidden bg-white dark:bg-slate-900 rounded-3xl shadow-xl dark:shadow-none border border-slate-100 dark:border-slate-800 flex flex-col overflow-hidden transition-colors" style={{ transform: 'rotateY(180deg)' }}>
                 <StatusBadge />
                 <div className="flex justify-between items-center px-6 py-4 pt-16 border-b border-slate-100 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm z-10 shrink-0">
-                    <div className="flex flex-col"><h3 className="text-xl font-bold text-slate-800 dark:text-white">{word.term}</h3></div>
+                    <div className="flex flex-col">
+                        <h3 className="text-xl font-bold text-slate-800 dark:text-white">{word.term}</h3>
+                        {word.phonetic && <span className="text-sm font-mono text-slate-400">{word.phonetic}</span>}
+                    </div>
                     
                     {/* Quick Action Buttons */}
                     <div className="flex gap-2">
@@ -166,32 +179,41 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
                 </div>
 
                 {/* SCROLLABLE CONTENT AREA */}
-                {/* CRITICAL FIX: Stop propagation on content area to allow native scrolling without triggering swipe */}
+                {/* Fixed: Desktop scrolling enabled, text selection won't trigger flip */}
                 <div 
-                    className="flex-grow overflow-y-auto no-scrollbar p-6 space-y-6 bg-white dark:bg-slate-900" 
+                    className="flex-grow overflow-y-auto p-6 space-y-6 bg-white dark:bg-slate-900" 
                     style={{ touchAction: 'pan-y' }}
                     onTouchStart={(e) => e.stopPropagation()}
                     onTouchMove={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()} 
+                    onWheel={(e) => e.stopPropagation()} // Isolate wheel scroll
+                    onClick={(e) => {
+                        const selection = window.getSelection();
+                        // If user is selecting text, do NOT flip the card
+                        if (selection && selection.toString().length > 0) {
+                            e.stopPropagation();
+                        }
+                    }}
                 >
                     {word.meanings.map((meaning, idx) => (
                     <div key={idx} className="pb-4 border-b border-slate-100 dark:border-slate-800 last:border-0 last:pb-0">
-                        {/* 1. POS + Definition Inline - Simplified Layout */}
-                        <div className="flex flex-wrap items-baseline gap-2 mb-2">
-                            <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400 font-mono bg-indigo-50 dark:bg-indigo-900/30 px-1.5 rounded">
-                                {meaning.partOfSpeech}
-                            </span>
-                            <span className="text-lg font-bold text-slate-800 dark:text-slate-100 leading-snug">
+                        {/* 1. POS + Definition Inline */}
+                        <div className="mb-3">
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs font-bold text-white bg-indigo-500 dark:bg-indigo-600 px-2 py-0.5 rounded font-mono">
+                                    {meaning.partOfSpeech}
+                                </span>
+                            </div>
+                            <div className="text-lg font-bold text-slate-800 dark:text-slate-100 leading-snug">
                                 {meaning.definition}
-                            </span>
+                            </div>
                         </div>
                         
                         {/* 2. Example & Translation */}
-                        <div className="pl-1">
-                            <p className="text-base text-slate-700 dark:text-slate-300 font-medium leading-relaxed font-serif">
+                        <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 border border-slate-100 dark:border-slate-700/50">
+                            <p className="text-base text-slate-700 dark:text-slate-300 font-medium leading-relaxed font-serif mb-1.5">
                                 {meaning.example}
                             </p>
-                            <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
+                            <p className="text-sm text-slate-400 dark:text-slate-500">
                                 {meaning.translation}
                             </p>
                         </div>

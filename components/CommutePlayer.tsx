@@ -31,6 +31,21 @@ export const CommutePlayer: React.FC<CommutePlayerProps> = ({ playlist, onClose 
   const speak = (text: string, lang: string = 'en-US', rate: number = 0.9): Promise<void> => {
     return new Promise((resolve) => {
         const u = new SpeechSynthesisUtterance(text);
+        
+        // Load voices if not already loaded (Chrome requires this)
+        let voices = window.speechSynthesis.getVoices();
+        
+        // Voice Selection
+        if (lang === 'en-US') {
+             const preferredVoice = voices.find(v => v.name.includes("Google US English")) || 
+                                    voices.find(v => v.name.includes("Microsoft Zira")) ||
+                                    voices.find(v => v.lang === 'en-US');
+             if (preferredVoice) u.voice = preferredVoice;
+        } else if (lang === 'zh-CN') {
+             const preferredVoice = voices.find(v => v.lang === 'zh-CN' || v.lang === 'zh');
+             if (preferredVoice) u.voice = preferredVoice;
+        }
+
         u.lang = lang;
         u.rate = rate;
         u.onend = () => resolve();
@@ -109,7 +124,7 @@ export const CommutePlayer: React.FC<CommutePlayerProps> = ({ playlist, onClose 
               </div>
               <div className="flex flex-col w-24">
                   <span className="text-xs font-bold truncate">{currentWord.term}</span>
-                  <span className="text-[10px] text-slate-400 truncate">{isPlaying ? 'Playing...' : 'Paused'}</span>
+                  <span className="text-xs text-slate-400 truncate">{isPlaying ? 'Playing...' : 'Paused'}</span>
               </div>
               <button onClick={togglePlay} className="p-1 hover:text-indigo-400">
                   {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}

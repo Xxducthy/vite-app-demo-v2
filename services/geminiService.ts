@@ -1,3 +1,4 @@
+
 import { AIEnrichResponse, ComparatorResult, EtymologyResult } from "../types";
 
 // DeepSeek / OpenAI Compatible Service
@@ -72,14 +73,14 @@ export const enrichWordWithAI = async (inputTerm: string): Promise<AIEnrichRespo
 Reqs:
 1. 2 common meanings.
 2. Examples: Simple, very short (<10 words).
+3. Translation: MUST be the Chinese translation of the EXAMPLE SENTENCE, NOT the word definition.
 Schema:
 {
   "term": "${inputTerm}",
   "phonetic": "IPA",
   "mnemonic": "Brief Chinese aid",
   "meanings": [
-    { "partOfSpeech": "v./n.", "definition": "CN", "example": "Short sentence", "translation": "CN" },
-    { "partOfSpeech": "v./n.", "definition": "CN", "example": "Short sentence", "translation": "CN" }
+    { "partOfSpeech": "v./n.", "definition": "CN Word Definition", "example": "English Sentence", "translation": "CN Sentence Translation" }
   ]
 }`;
 

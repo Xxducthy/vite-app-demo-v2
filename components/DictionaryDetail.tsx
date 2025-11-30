@@ -118,6 +118,12 @@ export const DictionaryDetail: React.FC<DictionaryDetailProps> = ({ term, existi
   const speakText = (text: string) => {
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice = voices.find(v => v.name.includes("Google US English")) || 
+                           voices.find(v => v.name.includes("Microsoft Zira")) ||
+                           voices.find(v => v.lang === 'en-US');
+    if (preferredVoice) u.voice = preferredVoice;
+    
     window.speechSynthesis.speak(u);
   };
 

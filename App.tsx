@@ -18,7 +18,7 @@ import { Book, List, Plus, GraduationCap, AlertCircle, Search, Settings, BookOpe
 const STORAGE_KEY = 'kaoyan_vocab_progress_v1';
 const HISTORY_KEY = 'kaoyan_study_history_v1';
 const SESSION_STORAGE_KEY = 'kaoyan_session_state_v1';
-const APP_VERSION = 'v8.9 (Auto Enrich)';
+const APP_VERSION = 'v8.9.3 (TTS Fixes)';
 
 const App: React.FC = () => {
   // --- Data State ---

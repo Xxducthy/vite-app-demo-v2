@@ -26,6 +26,12 @@ export const WordList: React.FC<WordListProps> = ({ words, onDelete, onEnrich, o
 
   const playAudio = (text: string) => {
     const u = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice = voices.find(v => v.name.includes("Google US English")) || 
+                           voices.find(v => v.name.includes("Microsoft Zira")) ||
+                           voices.find(v => v.lang === 'en-US');
+    if (preferredVoice) u.voice = preferredVoice;
+    
     window.speechSynthesis.speak(u);
   };
 
