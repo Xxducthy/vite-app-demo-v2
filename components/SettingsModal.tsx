@@ -3,6 +3,46 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Key, Database, Download, Upload, Copy, ClipboardPaste, FileText, AlertTriangle, Check, Target, Moon, Sun } from 'lucide-react';
 import { Word } from '../types';
 
+// Helper: Smart Merge Strategy
+// Prioritize the version with higher repetitions/interval (more progress)
+const mergeWords = (localWords: Word[], importedWords: Word[]): Word[] => {
+    const wordMap = new Map<string, Word>();
+    
+    // 1. Load local words
+    localWords.forEach(w => wordMap.set(w.term.toLowerCase(), w));
+
+    // 2. Merge imported words
+    importedWords.forEach(imported => {
+        const key = imported.term.toLowerCase();
+        const existing = wordMap.get(key);
+
+        if (!existing) {
+            // New word, just add
+            wordMap.set(key, imported);
+        } else {
+            // Conflict: Choose the one with better progress
+            // Criteria: Higher repetitions -> Higher interval -> Later nextReview -> Last reviewed
+            
+            const existingScore = (existing.repetitions * 1000) + existing.interval;
+            const importedScore = (imported.repetitions * 1000) + imported.interval;
+
+            // If imported has more progress, overwrite local
+            if (importedScore > existingScore) {
+                wordMap.set(key, imported);
+            } 
+            // If scores are equal, take the one reviewed most recently
+            else if (importedScore === existingScore) {
+                if ((imported.lastReviewed || 0) > (existing.lastReviewed || 0)) {
+                    wordMap.set(key, imported);
+                }
+            }
+            // Otherwise keep existing
+        }
+    });
+
+    return Array.from(wordMap.values());
+};
+
 interface SettingsModalProps {
   onClose: () => void;
   currentWords?: Word[];
@@ -12,14 +52,14 @@ interface SettingsModalProps {
   appVersion?: string;
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWords, onRestoreData, onMergeData, onClearData, appVersion }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWords = [], onRestoreData, onMergeData, onClearData, appVersion }) => {
   const [apiKey, setApiKey] = useState('');
   const [dailyGoal, setDailyGoal] = useState<number>(50);
   const [activeTab, setActiveTab] = useState<'code' | 'file'>('code');
   const [syncString, setSyncString] = useState('');
   const [copyMsg, setCopyMsg] = useState<{type: 'success'|'error', text: string} | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [importMode, setImportMode] = useState<'restore' | 'merge'>('restore');
+  const [importMode, setImportMode] = useState<'restore' | 'merge'>('merge'); // Default to SAFE merge
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
@@ -61,7 +101,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
               setCopyMsg({type: 'error', text: "没有数据"}); return;
           }
           const json = JSON.stringify(currentWords);
+          // Use standard encoding compatible with decodeURIComponent
           const code = btoa(unescape(encodeURIComponent(json)));
+          
           if (code.length > 50000) {
               setCopyMsg({type: 'error', text: "数据量过大，请切换到“文件同步”"});
               return;
@@ -82,12 +124,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
       try {
           const jsonStr = decodeURIComponent(escape(atob(syncString.trim())));
           const json = JSON.parse(jsonStr);
+          
           if (Array.isArray(json) && onRestoreData) {
-              if(confirm(`识别到 ${json.length} 个单词。\n确定要覆盖当前进度吗？`)) {
-                  onRestoreData(json);
-                  clearSessionStorage();
-                  setSyncString('');
-                  setCopyMsg({type: 'success', text: "同步成功！"});
+              if (importMode === 'merge') {
+                  // Smart Merge for Code Import
+                  const merged = mergeWords(currentWords, json);
+                  if(confirm(`识别到 ${json.length} 个单词。\n智能合并后将有 ${merged.length} 个单词。\n(会自动保留背诵进度更靠前的版本)`)) {
+                      onRestoreData(merged); 
+                      clearSessionStorage();
+                      setSyncString('');
+                      setCopyMsg({type: 'success', text: "智能合并成功！"});
+                  }
+              } else {
+                  // Full Overwrite
+                  if(confirm(`识别到 ${json.length} 个单词。\n确定要覆盖当前进度吗？(本地进度将丢失)`)) {
+                      onRestoreData(json);
+                      clearSessionStorage();
+                      setSyncString('');
+                      setCopyMsg({type: 'success', text: "同步成功！"});
+                  }
               }
           } else { throw new Error(); }
       } catch (e) {
@@ -110,11 +165,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
     document.body.removeChild(link);
   };
 
-  const handleImportClick = (mode: 'restore' | 'merge') => {
-    setImportMode(mode);
-    fileInputRef.current?.click();
-  };
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -124,12 +174,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
         const json = JSON.parse(event.target?.result as string);
         if (Array.isArray(json)) {
             if (importMode === 'restore' && onRestoreData) {
-                onRestoreData(json);
-                clearSessionStorage();
+                if(confirm(`确定要用文件中的 ${json.length} 个单词覆盖当前数据吗？`)) {
+                    onRestoreData(json);
+                    clearSessionStorage();
+                    alert("恢复成功");
+                }
             }
-            else if (importMode === 'merge' && onMergeData) {
-                onMergeData(json);
+            else if (importMode === 'merge' && onRestoreData) {
+                // Smart Merge for File Import
+                const merged = mergeWords(currentWords, json);
+                onRestoreData(merged);
                 clearSessionStorage();
+                alert(`合并成功！当前共 ${merged.length} 个单词。\n(已自动保留最高背诵进度)`);
             }
         } else { alert("文件格式错误"); }
       } catch (err) { alert("解析失败"); }
@@ -166,6 +222,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
                 className={`w-12 h-7 rounded-full transition-colors relative ${isDark ? 'bg-indigo-600' : 'bg-slate-300'}`}
             >
                 <div className={`w-5 h-5 bg-white rounded-full absolute top-1 transition-transform shadow-sm ${isDark ? 'left-6' : 'left-1'}`}></div>
+            </button>
+        </div>
+
+        {/* Import Mode Toggle (New) */}
+        <div className="bg-slate-50 dark:bg-slate-800 p-1 rounded-lg mb-4 flex">
+            <button 
+                onClick={() => setImportMode('merge')}
+                className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${importMode === 'merge' ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-white shadow-sm' : 'text-slate-400'}`}
+            >
+                智能合并 (保留进度)
+            </button>
+            <button 
+                onClick={() => setImportMode('restore')}
+                className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${importMode === 'restore' ? 'bg-white dark:bg-slate-600 text-rose-500 dark:text-rose-400 shadow-sm' : 'text-slate-400'}`}
+            >
+                完全覆盖 (慎用)
             </button>
         </div>
 
@@ -206,8 +278,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
                    <button onClick={handleGenerateCode} className="flex items-center justify-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 py-2.5 rounded-xl text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
                        <Copy size={14} /> 生成并复制
                    </button>
-                   <button onClick={handleImportCode} className="flex items-center justify-center gap-2 bg-indigo-600 text-white py-2.5 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors">
-                       <ClipboardPaste size={14} /> 识别并导入
+                   <button onClick={handleImportCode} className={`flex items-center justify-center gap-2 text-white py-2.5 rounded-xl text-xs font-bold transition-colors ${importMode === 'merge' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-rose-600 hover:bg-rose-700'}`}>
+                       <ClipboardPaste size={14} /> {importMode === 'merge' ? '导入并合并' : '导入并覆盖'}
                    </button>
                </div>
             </div>
@@ -223,17 +295,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, currentWo
                         <div className="flex items-center gap-3">
                             <div className="bg-white dark:bg-slate-600 p-2 rounded-lg shadow-sm text-slate-600 dark:text-slate-200"><Download size={18} /></div>
                             <div className="text-left">
-                                <div className="text-sm font-bold text-slate-700 dark:text-slate-200">导出备份文件</div>
-                                <div className="text-[10px] text-slate-400">保存到手机/电脑</div>
+                                <div className="text-sm font-bold text-slate-700 dark:text-slate-200">导出进度文件</div>
+                                <div className="text-[10px] text-slate-400">完整备份 (JSON)</div>
                             </div>
                         </div>
                     </button>
-                    <button onClick={() => handleImportClick('restore')} className="flex items-center justify-between px-4 py-3 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-colors group">
+                    <button onClick={() => fileInputRef.current?.click()} className={`flex items-center justify-between px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors group ${importMode === 'merge' ? 'bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/30 border-indigo-200 dark:border-indigo-800' : 'bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/20 dark:hover:bg-rose-900/30 border-rose-200 dark:border-rose-800'}`}>
                         <div className="flex items-center gap-3">
-                            <div className="bg-white dark:bg-slate-600 p-2 rounded-lg shadow-sm text-slate-600 dark:text-slate-200"><Upload size={18} /></div>
+                            <div className={`p-2 rounded-lg shadow-sm ${importMode === 'merge' ? 'bg-white dark:bg-indigo-800 text-indigo-600 dark:text-indigo-200' : 'bg-white dark:bg-rose-800 text-rose-600 dark:text-rose-200'}`}><Upload size={18} /></div>
                             <div className="text-left">
-                                <div className="text-sm font-bold text-slate-700 dark:text-slate-200">导入备份文件</div>
-                                <div className="text-[10px] text-slate-400">覆盖当前进度</div>
+                                <div className={`text-sm font-bold ${importMode === 'merge' ? 'text-indigo-700 dark:text-indigo-200' : 'text-rose-700 dark:text-rose-200'}`}>
+                                    {importMode === 'merge' ? '选择文件 (智能合并)' : '选择文件 (完全覆盖)'}
+                                </div>
+                                <div className={`text-[10px] ${importMode === 'merge' ? 'text-indigo-400 dark:text-indigo-300' : 'text-rose-400 dark:text-rose-300'}`}>
+                                    {importMode === 'merge' ? '保留最高进度' : '警告: 覆盖现有数据'}
+                                </div>
                             </div>
                         </div>
                     </button>

@@ -204,7 +204,8 @@ export const Flashcard: React.FC<FlashcardProps> = ({ word, onStatusChange, onNe
                 {/* Added 'touch-action: pan-y' to explicit allow vertical scroll */}
                 <div 
                     className="flex-grow overflow-y-auto p-6 md:p-10 space-y-6 md:space-y-8 bg-white dark:bg-slate-900" 
-                    style={{ touchAction: 'pan-y' }}
+                    style={{ touchAction: 'pan-y', overscrollBehaviorY: 'contain' }}
+                    onWheel={(e) => e.stopPropagation()}
                     onClick={(e) => {
                         const selection = window.getSelection();
                         // If selecting text, don't flip
