@@ -153,14 +153,14 @@ export const DictionaryDetail: React.FC<DictionaryDetailProps> = ({ term, existi
           />
       )}
 
-      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3 bg-white dark:bg-slate-900 sticky top-0 z-20">
+      <div className="absolute top-0 left-0 right-0 pt-28 px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur z-20">
         <button onClick={onBack} className="p-2 -ml-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-500 dark:text-slate-400 transition-colors">
           <ArrowLeft size={22} />
         </button>
         <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">词典详情</h2>
       </div>
 
-      <div className="flex-grow overflow-y-auto no-scrollbar">
+      <div className="flex-grow overflow-y-auto no-scrollbar pt-48">
         {isLoading && !previewData ? (
           <div className="flex flex-col items-center justify-center h-64 space-y-4">
             <Loader2 size={48} className="text-indigo-600 animate-spin" />

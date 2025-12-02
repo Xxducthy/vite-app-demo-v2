@@ -68,20 +68,22 @@ export const WordList: React.FC<WordListProps> = ({ words, onDelete, onEnrich, o
   };
 
   return (
-    <div className="flex flex-col h-full bg-white/50 dark:bg-slate-900/50">
-      
-      {/* Toolbar */}
-      <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur sticky top-0 z-20 transition-colors">
-        <div className="flex items-center justify-between gap-4">
-           <div className="flex gap-2 overflow-x-auto no-scrollbar">
+    <div className="relative h-full">
+      {/* Background for List Mode */}
+      <div className="absolute inset-0 bg-white/60 dark:bg-slate-900/60 backdrop-blur-md border border-white/50 dark:border-slate-800 rounded-3xl m-2 pointer-events-none"></div>
+
+      {/* Toolbar - Absolutely positioned below App Header space */}
+      <div className="absolute top-0 left-0 right-0 z-20 pt-28 pb-4 px-6 bg-gradient-to-b from-slate-50 via-slate-50 to-transparent dark:from-black dark:via-black dark:to-transparent pointer-events-none">
+        <div className="pointer-events-auto flex items-center justify-between gap-4 p-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm">
+           <div className="flex gap-2 overflow-x-auto no-scrollbar p-1">
              {(['all', WordStatus.New, WordStatus.Learning, WordStatus.Mastered] as const).map((s) => (
                <button
                  key={s}
                  onClick={() => setStatusFilter(s)}
-                 className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${
+                 className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${
                    statusFilter === s 
                      ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-slate-900 dark:border-white' 
-                     : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                     : 'bg-transparent text-slate-500 dark:text-slate-400 border-transparent hover:bg-slate-100 dark:hover:bg-slate-700'
                  }`}
                >
                  {s === 'all' ? '全部' : s === WordStatus.New ? '新词' : s === WordStatus.Learning ? '学习中' : '已掌握'}
@@ -90,25 +92,20 @@ export const WordList: React.FC<WordListProps> = ({ words, onDelete, onEnrich, o
            </div>
            
            {/* Commute Button (Play Filtered) */}
-           <div className="flex items-center gap-2 shrink-0">
-               {filteredWords.length > 0 && (
-                   <button 
-                      onClick={() => onPlayCommute(filteredWords)}
-                      className="w-8 h-8 flex items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:scale-110 transition-transform"
-                      title="Play Audio"
-                   >
-                       <Headphones size={16} />
-                   </button>
-               )}
-               <div className="text-xs text-slate-400 font-medium px-2">
-                  {filteredWords.length} 
-               </div>
-           </div>
+           {filteredWords.length > 0 && (
+               <button 
+                  onClick={() => onPlayCommute(filteredWords)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:scale-110 transition-transform shrink-0 mr-1"
+                  title="Play Audio"
+               >
+                   <Headphones size={16} />
+               </button>
+           )}
         </div>
       </div>
 
-      {/* List Content */}
-      <div className="flex-grow overflow-y-auto no-scrollbar p-4 space-y-3 pb-24">
+      {/* List Content - Full height scrollable with top padding */}
+      <div className="h-full overflow-y-auto no-scrollbar pt-48 px-4 pb-32">
         {filteredWords.length === 0 ? (
            <div className="flex flex-col items-center justify-center h-64 text-slate-400">
              <Search size={48} className="opacity-20 mb-4" />
@@ -125,7 +122,8 @@ export const WordList: React.FC<WordListProps> = ({ words, onDelete, onEnrich, o
              )}
            </div>
         ) : (
-          filteredWords.map(word => (
+          <div className="space-y-3">
+          {filteredWords.map(word => (
             <div 
               key={word.id} 
               onClick={() => onSelectWord(word)}
@@ -202,7 +200,8 @@ export const WordList: React.FC<WordListProps> = ({ words, onDelete, onEnrich, o
                 </button>
               </div>
             </div>
-          ))
+          ))}
+          </div>
         )}
       </div>
     </div>

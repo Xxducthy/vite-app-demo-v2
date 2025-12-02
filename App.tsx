@@ -18,7 +18,7 @@ import { Book, List, Plus, GraduationCap, AlertCircle, Search, Settings, BookOpe
 const STORAGE_KEY = 'kaoyan_vocab_progress_v1';
 const HISTORY_KEY = 'kaoyan_study_history_v1';
 const SESSION_STORAGE_KEY = 'kaoyan_session_state_v1';
-const APP_VERSION = 'v8.9.5 (Desktop Scroll Fixes)';
+const APP_VERSION = 'v8.9.6 (Touch Improved)';
 
 const App: React.FC = () => {
   // --- Data State ---
@@ -537,8 +537,8 @@ const App: React.FC = () => {
       <div className="fixed top-[-10%] left-[-10%] w-[500px] h-[500px] bg-indigo-100/60 dark:bg-indigo-900/20 rounded-full blur-[80px] pointer-events-none z-0"></div>
       <div className="fixed bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-purple-100/50 dark:bg-purple-900/20 rounded-full blur-[80px] pointer-events-none z-0"></div>
 
-      <header className="fixed top-0 left-0 right-0 z-50 px-4 pb-3 transition-all duration-300" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}>
-        <div className="max-w-2xl mx-auto bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-white/60 dark:border-slate-800 shadow-sm rounded-2xl px-4 py-2.5 flex justify-between items-center gap-3 relative">
+      <header className="fixed top-0 left-0 right-0 z-50 px-4 pb-3 transition-all duration-300 pointer-events-none" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}>
+        <div className="max-w-2xl mx-auto bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-white/60 dark:border-slate-800 shadow-sm rounded-2xl px-4 py-2.5 flex justify-between items-center gap-3 relative pointer-events-auto">
           <div className="flex items-center gap-2 shrink-0 cursor-pointer group" onClick={() => { setMode('study'); setShowSetup(false); }}>
             <div className="bg-slate-900 dark:bg-indigo-600 p-1.5 rounded-lg shadow-md group-hover:scale-105 transition-transform"><GraduationCap className="text-white" size={18} /></div>
             <span className="font-bold text-slate-800 dark:text-white text-sm tracking-tight hidden xs:block">考研 AI</span>
@@ -563,7 +563,8 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <main className="flex-grow relative w-full h-full overflow-hidden z-10 pt-32 pb-24 px-4">
+      {/* Main Container - removed global padding to fix dead zones, now managed by children */}
+      <main className="flex-grow relative w-full h-full overflow-hidden z-10">
         {error && <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 bg-white/95 border border-rose-100 text-rose-500 px-4 py-2 rounded-full shadow-lg flex items-center gap-2 text-xs font-medium animate-in fade-in slide-in-from-top-2"><AlertCircle size={14} /> {error} <button onClick={() => setError(null)}>×</button></div>}
 
         <div className="w-full h-full max-w-2xl mx-auto transition-all duration-500">
@@ -588,7 +589,7 @@ const App: React.FC = () => {
                         isStoryLoading={isStoryLoading} 
                     />
                  ) : currentWord ? (
-                    <div className="w-full h-full flex flex-col items-center justify-center">
+                    <div className="w-full h-full flex flex-col items-center justify-center pt-28 pb-20 px-4">
                         <Flashcard 
                             key={currentWord.id} 
                             word={currentWord} 
@@ -634,7 +635,7 @@ const App: React.FC = () => {
           )}
 
           {mode === 'list' && (
-            <div className="h-full bg-white/60 dark:bg-slate-900/60 backdrop-blur-md rounded-3xl shadow-sm border border-white/50 dark:border-slate-800 overflow-hidden">
+            <div className="h-full">
               <WordList 
                 words={words} 
                 onDelete={handleDelete} 
@@ -650,13 +651,13 @@ const App: React.FC = () => {
           )}
 
           {mode === 'import' && (
-            <div className="h-full flex items-center justify-center p-4">
+            <div className="h-full flex items-center justify-center p-4 pt-24 pb-20">
                 <ImportModal onImport={handleImport} onLoadSample={handleLoadSample} isProcessing={enrichProgress !== null} />
             </div>
           )}
 
           {mode === 'store' && (
-              <div className="h-full bg-white/60 dark:bg-slate-900/60 backdrop-blur-md rounded-3xl shadow-sm border border-white/50 dark:border-slate-800 overflow-hidden">
+              <div className="h-full">
                   <LoveStore 
                     points={points}
                     shopItems={shopItems}

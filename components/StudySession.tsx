@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Play, CheckCircle2, Coffee, ArrowRight, Layers, Shuffle, RotateCcw, Dumbbell, Zap, AlertTriangle, PenTool, BookOpen, Sparkles, X, Loader2 } from 'lucide-react';
 import { StudyMode, ComparatorResult, EtymologyResult } from '../types';
@@ -212,7 +213,7 @@ export const StudySession: React.FC<StudySessionProps> = ({
   // --- SESSION COMPLETE VIEW ---
   if (isFinished) {
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center p-6 animate-in fade-in zoom-in duration-300">
+      <div className="w-full h-full flex flex-col items-center justify-center p-6 pt-32 pb-20 animate-in fade-in zoom-in duration-300">
         <div className="w-24 h-24 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-emerald-100 dark:shadow-none">
            <CheckCircle2 size={48} className="text-emerald-500 dark:text-emerald-400" />
         </div>
@@ -292,7 +293,7 @@ export const StudySession: React.FC<StudySessionProps> = ({
   const isAllCaughtUp = totalDue === 0;
 
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="w-full h-full flex flex-col items-center justify-center p-6 pt-32 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border border-white dark:border-slate-700 p-8 rounded-[2rem] shadow-2xl shadow-indigo-100 dark:shadow-none w-full max-w-sm text-center">
          
          <div className="flex justify-center mb-6">

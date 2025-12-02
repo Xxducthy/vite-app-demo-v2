@@ -68,7 +68,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ history, dailyGoal, totalW
   }, [history, dailyGoal]);
 
   return (
-    <div className="w-full h-full flex flex-col p-6 overflow-y-auto no-scrollbar pb-24 animate-in fade-in duration-500">
+    <div className="w-full h-full flex flex-col p-6 pt-32 pb-32 overflow-y-auto no-scrollbar animate-in fade-in duration-500">
         
         {/* Hero Section */}
         <div className="flex justify-between items-start mb-8">

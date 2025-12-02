@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { ShopItem, UserCoupon } from '../types';
 import { Heart, ShoppingBag, Ticket, Plus, Trash2, CheckCircle2, Gift } from 'lucide-react';
@@ -40,10 +41,10 @@ export const LoveStore: React.FC<LoveStoreProps> = ({
   };
 
   return (
-    <div className="h-full flex flex-col bg-pink-50/50 dark:bg-slate-900 animate-in fade-in">
+    <div className="h-full flex flex-col bg-pink-50/50 dark:bg-slate-900 animate-in fade-in pt-28 pb-32 relative">
       
       {/* Header with Points */}
-      <div className="p-6 pb-8 bg-gradient-to-r from-pink-400 to-rose-400 dark:from-pink-900 dark:to-rose-900 rounded-b-[2.5rem] shadow-lg shadow-pink-200 dark:shadow-none text-white relative z-10 shrink-0">
+      <div className="absolute top-28 left-0 right-0 p-6 pb-12 bg-gradient-to-r from-pink-400 to-rose-400 dark:from-pink-900 dark:to-rose-900 rounded-b-[2.5rem] shadow-lg shadow-pink-200 dark:shadow-none text-white z-10">
           <div className="flex justify-between items-center mb-4">
               <div className="flex items-center gap-2">
                   <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm">
@@ -65,8 +66,11 @@ export const LoveStore: React.FC<LoveStoreProps> = ({
           </div>
       </div>
 
+      {/* Spacer for absolute header */}
+      <div className="h-48 shrink-0"></div>
+
       {/* Tabs */}
-      <div className="flex justify-center -mt-6 z-20 mb-4 px-6">
+      <div className="flex justify-center -mt-6 z-20 mb-4 px-6 relative">
           <div className="bg-white dark:bg-slate-800 p-1.5 rounded-2xl shadow-xl shadow-slate-200/50 dark:shadow-none flex w-full max-w-xs border border-pink-100 dark:border-slate-700">
               <button 
                 onClick={() => setActiveTab('mall')}
@@ -84,7 +88,7 @@ export const LoveStore: React.FC<LoveStoreProps> = ({
       </div>
 
       {/* Content Area */}
-      <div className="flex-grow overflow-y-auto p-6 pb-24 space-y-4 no-scrollbar">
+      <div className="flex-grow overflow-y-auto p-6 space-y-4 no-scrollbar">
           
           {activeTab === 'mall' ? (
               <>
